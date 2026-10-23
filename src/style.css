@@ -113,6 +113,9 @@ code.code { font-size: 1.05rem; letter-spacing: .08em; font-weight: 600; }
 .slot-icoon { margin-left: 8px; }
 .slot-label { margin-left: 8px; }
 .chip select.cap { width: auto; margin: 0 2px 0 6px; padding: 0 4px; font-size: .85rem; border: 0; background: transparent; }
+.info-bericht { margin-top: 10px; }
+.info-bericht + .info-bericht { border-top: 1px solid var(--rand); padding-top: 10px; }
+.info-bericht p { margin: 0 0 4px; }
 .of { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; color: var(--zacht); font-size: .85rem; }
 .of::before, .of::after { content: ''; flex: 1; border-top: 1px solid var(--rand); }
 button.anders-knop { display: block; margin: 0 auto; }

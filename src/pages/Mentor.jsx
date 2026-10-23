@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { dag, dagTijd, datumLabel, hhmm, perDag, tijd } from '../lib/fmt.js'
+import { dag, dagKey, dagTijd, datumLabel, hhmm, perDag, tijd } from '../lib/fmt.js'
 import { download, maakCsv, maakIcs } from '../lib/files.js'
 import { KopieerKnop, Laden, LeerlingLijst, Statistiek, Tabs, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import { SCHOOL } from '../config.js'
@@ -193,15 +193,20 @@ function Overzicht({ ronde, docent, data, laad }) {
 function Beschikbaarheid({ ronde, data, laad }) {
   const { bezig, voer, melding, setBericht } = useActie()
   const [form, setForm] = useState({
-    datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 5, lokaal: data.slots.at(-1)?.lokaal || '',
+    datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 15, lokaal: data.slots.at(-1)?.lokaal || '',
     eetVan: SCHOOL.eetpauze?.[0] || '', eetTot: SCHOOL.eetpauze?.[1] || '',
   })
   const zet = (k) => (e) => { setBericht(null); setForm({ ...form, [k]: e.target.value }) }
   const dagInfo = data.dagen.find((d) => d.datum === form.datum)
   const [lokalen, setLokalen] = useState([])
+  const [lokaalAnders, setLokaalAnders] = useState(false) // zelf een lokaal typen dat niet in de lijst staat
   useEffect(() => {
-    supabase.from('lokalen').select('naam').order('volgorde').order('naam').then(({ data: d }) => setLokalen((d || []).map((x) => x.naam)))
-  }, [])
+    supabase.from('lokalen').select('naam').order('volgorde').order('naam').then(({ data: d }) => {
+      const namen = (d || []).map((x) => x.naam)
+      setLokalen(namen)
+      if (form.lokaal && !namen.includes(form.lokaal)) setLokaalAnders(true)
+    })
+  }, []) // eslint-disable-line
 
   function kiesDag(e) {
     const d = data.dagen.find((x) => x.datum === e.target.value)
@@ -229,7 +234,12 @@ function Beschikbaarheid({ ronde, data, laad }) {
         n += m || 0
       }
       await laad()
-      if (n === 0) throw new Error('Er zijn geen nieuwe tijdslots gemaakt. Ze overlappen met je bestaande tijden, of het lokaal is op dat moment vol (meestal max. 2 gesprekken tegelijk).')
+      if (n === 0) {
+        const alBezet = data.slots.some((s) => dagKey(s.start) === form.datum && tijd(s.start) < tot && tijd(s.eind) > van)
+        throw new Error(alBezet
+          ? `Er zijn geen nieuwe tijdslots gemaakt: je hebt op ${datumLabel(form.datum)} al tijden in dit tijdvak. Verwijder die eerst hieronder, of kies andere tijden.`
+          : `Er zijn geen nieuwe tijdslots gemaakt: lokaal ${form.lokaal} is op die tijden al vol. Kies een ander lokaal.`)
+      }
     }, `Tijdslots toegevoegd${eet ? ` (eetpauze ${form.eetVan}–${form.eetTot} vrijgehouden)` : ''}.`)
   }
 
@@ -256,15 +266,25 @@ function Beschikbaarheid({ ronde, data, laad }) {
           </select>
         </label>
         <div className="raster2">
-          <label>Van<input type="time" value={form.van} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('van')} required /></label>
-          <label>Tot<input type="time" value={form.tot} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('tot')} required /></label>
-          <label>Minuten per gesprek<input type="number" min="5" max="120" value={form.duur} onChange={zet('duur')} required /></label>
-          <label>Lokaal<input list="lokalen-lijst" value={form.lokaal} onChange={zet('lokaal')} placeholder="kies of typ" maxLength={20} />
-            <datalist id="lokalen-lijst">{lokalen.map((l) => <option key={l} value={l} />)}</datalist></label>
+          <label>Van<input type="time" step="300" value={form.van} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('van')} required /></label>
+          <label>Tot<input type="time" step="300" value={form.tot} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('tot')} required /></label>
+          <label>Minuten per gesprek<input type="number" min="5" max="120" step="5" value={form.duur} onChange={zet('duur')} required /></label>
+          <label>Lokaal
+            <select value={lokaalAnders ? '__anders' : form.lokaal} onChange={(e) => {
+              setBericht(null)
+              if (e.target.value === '__anders') { setLokaalAnders(true); setForm({ ...form, lokaal: '' }) }
+              else { setLokaalAnders(false); setForm({ ...form, lokaal: e.target.value }) }
+            }}>
+              <option value="">Geen lokaal</option>
+              {lokalen.map((l) => <option key={l} value={l}>{l}</option>)}
+              <option value="__anders">Ander lokaal…</option>
+            </select>
+            {lokaalAnders && <input value={form.lokaal} onChange={zet('lokaal')} placeholder="Typ het lokaal" maxLength={20} autoFocus />}
+          </label>
           <label>Pauze na elke … gesprekken<input type="number" min="0" value={form.pauzeNa} onChange={zet('pauzeNa')} /></label>
-          <label>Pauze (minuten)<input type="number" min="0" value={form.pauzeMin} onChange={zet('pauzeMin')} /></label>
-          <label>Eetpauze van<input type="time" value={form.eetVan} onChange={zet('eetVan')} /></label>
-          <label>Eetpauze tot<input type="time" value={form.eetTot} onChange={zet('eetTot')} /></label>
+          <label>Pauze (minuten)<input type="number" min="0" step="5" value={form.pauzeMin} onChange={zet('pauzeMin')} /></label>
+          <label>Eetpauze van<input type="time" step="300" value={form.eetVan} onChange={zet('eetVan')} /></label>
+          <label>Eetpauze tot<input type="time" step="300" value={form.eetTot} onChange={zet('eetTot')} /></label>
         </div>
         <p className="zacht klein">Zet 0 bij ‘pauze na’ voor geen korte pauzes. Maak de eetpauze leeg als je die niet wilt; in de eetpauze worden geen gesprekken gepland.</p>
         {melding}
@@ -384,13 +404,35 @@ function Instellingen({ ronde, docent, data, laad }) {
     }, 'Informatie opgeslagen.')
   }
 
+  // Naam zoals leerlingen en ouders die zien, bijv. "Dhr. Bonte"
+  const naamActie = useActie()
+  const [weergave, setWeergave] = useState(docent.weergavenaam || '')
+  async function bewaarNaam(e) {
+    e.preventDefault()
+    await naamActie.voer(async () => {
+      const { error } = await supabase.rpc('zet_weergavenaam', { p_naam: weergave })
+      if (error) throw error
+      docent.weergavenaam = weergave.trim() || null
+    }, 'Naam opgeslagen.')
+  }
+
   return (
     <>
+      <form className="kaart" onSubmit={bewaarNaam}>
+        <h2>Je naam voor leerlingen en ouders</h2>
+        <p className="zacht">Zo sta je in het portaal bij “Kies een moment”, bij de afspraak en onder je informatie. Leeg = {docent.naam}.</p>
+        <div className="zoekrij">
+          <input value={weergave} onChange={(e) => setWeergave(e.target.value)} maxLength={40} placeholder={`Bijv. Dhr. ${docent.naam.split(' ').slice(-1)[0]} of Mevr. ${docent.naam.split(' ').slice(-1)[0]}`} />
+          <button type="submit" disabled={naamActie.bezig || weergave === (docent.weergavenaam || '')}>Opslaan</button>
+        </div>
+        {naamActie.melding}
+      </form>
       <form className="kaart" onSubmit={bewaar}>
-        <h2>Informatie voor ouders en leerling</h2>
-        <p className="zacht">Dit zien leerling en ouders na het inloggen, bijvoorbeeld waar het gesprek is en wat ze kunnen voorbereiden.</p>
+        <h2>Informatie voor leerling en ouder(s)/verzorger(s)</h2>
+        <p className="zacht">Dit ziet de leerling met ouder(s)/verzorger(s) na het inloggen, bijvoorbeeld waar het gesprek is en wat er voorbereid kan worden.
+          Bij een duo-mentoraat ziet de leerling de berichten van beide mentoren onder elkaar, elk met de naam eronder.</p>
         <textarea rows={5} maxLength={1000} value={tekst} onChange={(e) => setTekst(e.target.value)}
-          placeholder="Bijv. Het gesprek duurt 15 minuten in lokaal 1.12. Neem je rapport mee." />
+          placeholder="Bijv. Het gesprek duurt 20 minuten en vindt plaats in lokaal M101. Neemt u het laatste rapport mee?" />
         {info.melding}
         <button type="submit" disabled={info.bezig}>Opslaan</button>
       </form>
@@ -541,18 +583,19 @@ function AgendaKoppeling({ docent, geboekt, downloaden }) {
 // ------------------------------------------ Uitnodiging voor ouders (kopiëren)
 function Uitnodiging({ ronde, docent }) {
   const [open, setOpen] = useState(false)
-  const site = window.location.origin
+  const site = window.location.origin + window.location.pathname
   const tekst = `Beste ouder(s)/verzorger(s),
 
-Binnenkort vinden de verplichte mentor-ouder-leerlinggesprekken (MOL) plaats. Graag nodig ik u samen met uw kind uit voor dit gesprek.
+Binnenkort vinden de mentorgesprekken plaats: een gesprek tussen u, uw zoon of dochter en de mentor (MOL-gesprek). Dit gesprek is verplicht. Graag nodig ik u hiervoor uit.
 
-U kiest zelf een moment via ${site}
-Log in met het schoolaccount van uw kind (zijn/haar schoolmail en wachtwoord). Daar ziet u de beschikbare tijden en kunt u eventueel een vraag voor mij achterlaten.
-${ronde.inschrijven_tot ? `\nInschrijven en wijzigen kan tot ${dagTijd(ronde.inschrijven_tot)}.` : ''}
-Past geen enkel moment? Geef dat dan aan via dezelfde website, dan neem ik contact met u op.
+U kunt zelf een moment kiezen via ${site}
+Log in met het schoolaccount van uw kind. U ziet dan de beschikbare tijden en kunt eventueel een vraag of opmerking voor mij achterlaten.
+${ronde.inschrijven_tot ? `\nInschrijven en wijzigen kan tot ${dagTijd(ronde.inschrijven_tot)}.\n` : ''}
+Past geen van de momenten? Geeft u dat dan aan via dezelfde website; ik neem daarna contact met u op.
 
 Met vriendelijke groet,
-${docent.naam}
+
+${docent.weergavenaam || docent.naam}
 Mentor`
   return (
     <div className="kaart">

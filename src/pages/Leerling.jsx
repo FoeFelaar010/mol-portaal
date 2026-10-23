@@ -17,12 +17,13 @@ export default function Leerling({ leerling, kijk = false }) {
 
   return (
     <>
-      <h1>Beste {voornaam} en ouder(s)/verzorger(s)</h1>
-      <p>Hier plant u samen het <strong>mentor-ouder-leerlinggesprek</strong> (MOL). Het gesprek is verplicht: kies een moment dat voor u allebei past.</p>
+      <h1>Beste {voornaam} en ouder(s)/verzorger(s),</h1>
+      <p>Via deze pagina plant u het verplichte <strong>MOL-gesprek</strong>: een gesprek tussen leerling, ouder(s)/verzorger(s) en mentor.
+        Kies samen een moment dat past.</p>
       <p className="zacht">Klas {leerling.klas}</p>
       {!rondes && <Laden />}
       {rondes && !rondes.length && (
-        <div className="kaart"><p>Er is op dit moment geen gespreksronde open. Je krijgt bericht als je kunt inschrijven.</p></div>
+        <div className="kaart"><p>Er is op dit moment geen gespreksronde open. U krijgt bericht zodra u een moment kunt kiezen.</p></div>
       )}
       {rondes?.map((r) => <Ronde key={r.id} ronde={r} kijk={kijk ? leerling.id : null} />)}
     </>
@@ -70,7 +71,7 @@ function Ronde({ ronde, kijk }) {
   async function kies(slot) {
     if (kijk) return
     const tekst = eigen
-      ? `Je afspraak verplaatsen naar ${dagTijd(slot.start)}?`
+      ? `De afspraak verplaatsen naar ${dagTijd(slot.start)}?`
       : `Gesprek inplannen op ${dagTijd(slot.start)} met ${slot.docent_naam}?`
     if (!await bevestig(tekst, { knop: eigen ? 'Ja, verplaatsen' : 'Ja, inplannen' })) return
     await voer(async () => {
@@ -78,17 +79,17 @@ function Ronde({ ronde, kijk }) {
       if (error) throw error
       await laad()
       setVerplaats(false)
-    }, 'Je gesprek is ingepland. Je kunt het in je agenda zetten.')
+    }, 'Het gesprek is ingepland. U kunt het in uw agenda zetten.')
   }
 
   async function annuleer() {
     if (kijk) return
-    if (!await bevestig('Weet je zeker dat je je afspraak wilt annuleren?')) return
+    if (!await bevestig('Weet u zeker dat u de afspraak wilt annuleren?')) return
     await voer(async () => {
       const { error } = await supabase.rpc('annuleer', { p_ronde: ronde.id })
       if (error) throw error
       await laad()
-    }, 'Je afspraak is geannuleerd.')
+    }, 'De afspraak is geannuleerd.')
   }
 
   async function bewaarOpmerking() {
@@ -105,13 +106,15 @@ function Ronde({ ronde, kijk }) {
       start: eigen.start, eind: eigen.eind,
       titel: `MOL-gesprek met ${eigen.docent_naam}`,
       locatie: eigen.lokaal ? `Lokaal ${eigen.lokaal}, Melanchthon Schiebroek` : 'Melanchthon Schiebroek',
-      omschrijving: 'Gesprek mentor, ouder(s) en leerling.',
+      omschrijving: 'MOL-gesprek: leerling, ouder(s)/verzorger(s) en mentor.',
     }]), 'text/calendar')
   }
 
   if (!mentoren) return <Laden />
 
   const perMentor = mentoren.map((m) => ({ ...m, slots: slots.filter((s) => s.docent_id === m.docent_id) }))
+  const deMentor = mentoren.length > 1 ? 'de mentoren' : 'de mentor'
+  const metInfo = mentoren.filter((m) => m.info)
 
   return (
     <section>
@@ -122,16 +125,21 @@ function Ronde({ ronde, kijk }) {
       {!open && <Melding type="info">De inschrijving is nu gesloten.</Melding>}
       {melding}
 
-      {mentoren.filter((m) => m.info).map((m) => (
-        <div key={m.docent_id} className="kaart info">
-          <strong>Informatie van {m.naam}</strong>
-          <p className="witregels">{m.info}</p>
+      {!!metInfo.length && (
+        <div className="kaart info">
+          <strong>Informatie van {metInfo.length > 1 ? 'de mentoren' : 'de mentor'}</strong>
+          {metInfo.map((m) => (
+            <div key={m.docent_id} className="info-bericht">
+              <p className="witregels">{m.info}</p>
+              <p className="zacht klein">{m.naam}</p>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
       {eigen && (
         <div className="kaart afspraak">
-          <span className="label ok">Jouw afspraak</span>
+          <span className="label ok">Afspraak</span>
           <h3>{dag(eigen.start)}</h3>
           <p>{tijd(eigen.start)} – {tijd(eigen.eind)} met <strong>{eigen.docent_naam}</strong>
             {eigen.lokaal && <> · lokaal <strong>{eigen.lokaal}</strong></>}</p>
@@ -146,9 +154,9 @@ function Ronde({ ronde, kijk }) {
 
       {(eigen || open) && (
         <div className="kaart">
-          <label>Vraag of opmerking voor je mentor (niet verplicht)
+          <label>Vraag of opmerking voor {deMentor} (niet verplicht)
             <textarea maxLength={100} rows={2} value={opmerking} disabled={!open || !!kijk}
-              placeholder="Bijv. ik wil het hebben over mijn planning"
+              placeholder="Bijv. graag willen we het hebben over de planning"
               onChange={(e) => setOpmerking(e.target.value)} />
           </label>
           <div className="zacht klein">{opmerking.length}/100 · Vul geen gevoelige of medische informatie in.</div>
@@ -181,7 +189,7 @@ function Ronde({ ronde, kijk }) {
       ))}
       {kijk && kanNiet && <p className="opmerking let">Leerling gaf door dat geen moment past: “{kanNiet.reden}”{kanNiet.voorkeur ? ` · kan wel: ${kanNiet.voorkeur}` : ''}</p>}
       {open && !eigen && !kijk && !!mentoren.length && <KanNiet ronde={ronde} kanNiet={kanNiet} klaar={laad} />}
-      {!mentoren.length && <p className="zacht">Er is nog geen mentor aan je klas gekoppeld.</p>}
+      {!mentoren.length && <p className="zacht">Er is nog geen mentor aan deze klas gekoppeld.</p>}
     </section>
   )
 }
@@ -205,26 +213,26 @@ function KanNiet({ ronde, kanNiet, klaar }) {
   if (kanNiet && !open) {
     return (
       <div className="kaart kan-niet">
-        <span className="label open">Doorgegeven aan je mentor</span>
-        <p>Je hebt laten weten dat geen enkel moment past: <em>“{kanNiet.reden}”</em>
+        <span className="label open">Doorgegeven aan de mentor</span>
+        <p>U heeft laten weten dat geen van de momenten past: <em>“{kanNiet.reden}”</em>
           {kanNiet.voorkeur && <> · Voorkeur: <em>{kanNiet.voorkeur}</em></>}</p>
-        <p>Het gesprek is verplicht. <strong>Je mentor neemt contact op</strong> om samen een moment te vinden.
-          Past er toch een moment hierboven? Kies het dan gewoon.</p>
+        <p>Het gesprek is verplicht. <strong>De mentor neemt contact met u op</strong> om samen een moment te vinden.
+          Past er toch een moment hierboven? Dan kunt u dat alsnog kiezen.</p>
         <button className="link" onClick={() => setOpen(true)}>Bericht aanpassen</button>
       </div>
     )
   }
   if (!open) {
-    return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Geen enkel moment past?</button></p>
+    return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Past geen van de momenten?</button></p>
   }
   return (
     <form className="kaart kan-niet" onSubmit={verstuur}>
-      <h3>Geen enkel moment past</h3>
-      <p>Het MOL-gesprek is <strong>verplicht</strong>. Laat je mentor weten waarom de tijden niet passen.
-        Je mentor neemt daarna contact op om samen een ander moment te vinden.</p>
-      <label>Waarom past geen enkel moment?
+      <h3>Geen van de momenten past</h3>
+      <p>Het MOL-gesprek is <strong>verplicht</strong>. Laat de mentor weten waarom de tijden niet passen.
+        De mentor neemt daarna contact met u op om samen een ander moment te vinden.</p>
+      <label>Waarom past geen van de momenten?
         <textarea rows={2} maxLength={200} required minLength={3} value={reden} onChange={(e) => setReden(e.target.value)}
-          placeholder="Bijv. beide ouders werken op die dagen tot 18:00" />
+          placeholder="Bijv. op die dagen werk ik tot 18:00" />
       </label>
       <label>Wanneer kan het wel? <span className="zacht">(niet verplicht)</span>
         <input maxLength={100} value={voorkeur} onChange={(e) => setVoorkeur(e.target.value)} placeholder="Bijv. dinsdag of donderdag na 17:00" />

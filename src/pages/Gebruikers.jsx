@@ -176,7 +176,7 @@ function Docenten({ d, laad, zelf }) {
     const email = bewerk.email.trim().toLowerCase()
     await voer(async () => {
       if (!bewerk.naam.trim() || !geldigMail(email)) throw new Error('Vul een naam en een geldig e-mailadres in.')
-      const { error } = await supabase.from('docenten').update({ naam: bewerk.naam.trim(), email }).eq('id', bewerk.id)
+      const { error } = await supabase.from('docenten').update({ naam: bewerk.naam.trim(), email, weergavenaam: (bewerk.weergavenaam || '').trim() || null }).eq('id', bewerk.id)
       if (error) throw dbFout(error)
       setBewerk(null)
       await laad()
@@ -225,6 +225,7 @@ function Docenten({ d, laad, zelf }) {
             <form className="bewerk" onSubmit={bewaar}>
               <input value={bewerk.naam} onChange={(e) => setBewerk({ ...bewerk, naam: e.target.value })} placeholder="Naam" required />
               <input type="email" value={bewerk.email} onChange={(e) => setBewerk({ ...bewerk, email: e.target.value })} placeholder="E-mail" required />
+              <input value={bewerk.weergavenaam || ''} onChange={(e) => setBewerk({ ...bewerk, weergavenaam: e.target.value })} maxLength={40} placeholder="Naam voor ouders, bijv. Dhr. Bonte" />
               <div className="knoppen">
                 <button type="submit" disabled={bezig}>Opslaan</button>
                 <button type="button" className="secundair" onClick={() => setBewerk(null)}>Annuleren</button>
@@ -234,11 +235,11 @@ function Docenten({ d, laad, zelf }) {
         ) : (
           <li key={x.id}>
             <div>
-              <strong>{x.naam}</strong> {x.is_admin && <span className="label">beheerder</span>}
+              <strong>{x.naam}</strong> {x.weergavenaam && <span className="zacht">({x.weergavenaam})</span>} {x.is_admin && <span className="label">beheerder</span>}
               <div className="zacht klein">{x.email}{klassenVan(x.id).length ? ` · mentor ${klassenVan(x.id).join(', ')}` : ''}</div>
             </div>
             <div className="rij-acties">
-              <button className="link" onClick={() => setBewerk({ id: x.id, naam: x.naam, email: x.email })}>Wijzigen</button>
+              <button className="link" onClick={() => setBewerk({ id: x.id, naam: x.naam, email: x.email, weergavenaam: x.weergavenaam || '' })}>Wijzigen</button>
               {x.id !== zelf.id && <button className="link" disabled={bezig} onClick={() => verwijder(x)}>Verwijderen</button>}
             </div>
           </li>
