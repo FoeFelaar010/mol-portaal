@@ -298,6 +298,28 @@ function Leerlingen({ d, laad, bekijk }) {
     }, `${rij.naam} toegevoegd aan ${rij.klas}.`)
   }
 
+  // Alle leerlingen die nu in de lijst staan (na zoeken/klasfilter) in één keer verwijderen
+  async function verwijderAlle() {
+    const ids = gevonden.map((l) => l.id)
+    if (!ids.length) return
+    let afspraken = 0
+    for (let i = 0; i < ids.length; i += 200) {
+      const { count } = await supabase.from('boekingen').select('id', { count: 'exact', head: true }).in('leerling_id', ids.slice(i, i + 200))
+      afspraken += count || 0
+    }
+    const wie = klas || zoek ? `${ids.length} leerlingen${klas ? ` uit ${klas}` : ''}${zoek ? ` (zoekterm “${zoek}”)` : ''}` : `alle ${ids.length} leerlingen`
+    const tekst = `${wie[0].toUpperCase()}${wie.slice(1)} verwijderen?${afspraken ? ` Ook ${afspraken} afspra${afspraken === 1 ? 'ak' : 'ken'} gaan weg.` : ''} Mentoren en klassen-koppelingen blijven staan. Typ VERWIJDER om door te gaan.`
+    if (!await bevestigTyp(tekst)) return
+    await voer(async () => {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await supabase.from('leerlingen').delete().in('id', ids.slice(i, i + 200))
+        if (error) throw error
+      }
+      setBewerk(null)
+      await laad()
+    }, `${ids.length} leerlingen verwijderd.`)
+  }
+
   async function verwijder(l) {
     const { count } = await supabase.from('boekingen').select('id', { count: 'exact', head: true }).eq('leerling_id', l.id)
     const tekst = `${l.naam} (${l.klas}) verwijderen?` + (count ? ` Ook ${count === 1 ? 'de afspraak' : `${count} afspraken`} van deze leerling ${count === 1 ? 'wordt' : 'worden'} verwijderd.` : '')
@@ -350,6 +372,11 @@ function Leerlingen({ d, laad, bekijk }) {
         {!lijst.length && <li className="zacht">Geen leerlingen gevonden.</li>}
       </ul>
       {gevonden.length > MAX && <p className="zacht klein">{MAX} van {gevonden.length} getoond. Zoek of kies een klas om te verfijnen.</p>}
+      {!!gevonden.length && (
+        <p><button className="gevaar" disabled={bezig} onClick={verwijderAlle}>
+          {klas || zoek ? `Deze ${gevonden.length} leerlingen verwijderen` : `Alle ${gevonden.length} leerlingen verwijderen`}
+        </button></p>
+      )}
       <datalist id="klassen-ll">{klassen.map((k) => <option key={k} value={k} />)}</datalist>
       <h3>Leerling toevoegen</h3>
       <form onSubmit={voegToe}>

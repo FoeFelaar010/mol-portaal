@@ -15,10 +15,10 @@ export default function Beheer({ docent }) {
     <>
       <h1>Beheer</h1>
       <Tabs actief={tab} kies={setTab} tabs={[
-        ['start', 'Start'], ['import', 'Lijsten'], ['gebruikers', 'Klassen & gebruikers'], ['rondes', 'Rondes'], ['overzicht', 'Overzicht'], ['beheerders', 'Meer'],
+        ['start', 'Start'], ['import', 'Import'], ['gebruikers', 'Klassen & gebruikers'], ['rondes', 'Rondes'], ['overzicht', 'Overzicht'], ['beheerders', 'Meer'],
       ]} />
       {tab === 'start' && <Start key={versie} ga={setTab} />}
-      {tab === 'import' && <><Import klaar={ververs} /><Klassen key={versie} /></>}
+      {tab === 'import' && <Import klaar={ververs} ga={setTab} />}
       {tab === 'gebruikers' && <Gebruikers zelf={docent} />}
       {tab === 'rondes' && <Rondes />}
       {tab === 'overzicht' && <Overzicht />}
@@ -230,42 +230,6 @@ function Ronde({ ronde, laad }) {
         {sluitInVerleden ? 'Let op: de sluitdatum ligt in het verleden. ' : ''}Leerlingen zien: inschrijven tot {dagTijd(ronde.inschrijven_tot)}.</p>}
       {melding}
       <button className="gevaar" onClick={verwijderRonde} disabled={bezig}>Ronde verwijderen</button>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------- Klassen-tabel
-function Klassen() {
-  const [d, setD] = useState(null)
-  useEffect(() => {
-    Promise.all([
-      supabase.from('klas_mentoren').select('klas, docenten(naam, email)'),
-      supabase.from('leerlingen').select('klas'),
-    ]).then(([km, ll]) => {
-      const perKlas = {}
-      for (const l of ll.data || []) perKlas[l.klas] = (perKlas[l.klas] || 0) + 1
-      for (const k of km.data || []) perKlas[k.klas] ??= 0
-      setD({ km: km.data || [], perKlas })
-    })
-  }, [])
-  if (!d) return null
-  const klassen = Object.keys(d.perKlas).sort()
-  if (!klassen.length) return null
-  return (
-    <div className="kaart">
-      <h2>Klassen in het portaal</h2>
-      <div className="scroll">
-        <table className="tabel">
-          <thead><tr><th>Klas</th><th>Leerlingen</th><th>Mentor(en)</th></tr></thead>
-          <tbody>
-            {klassen.map((k) => {
-              const m = d.km.filter((x) => x.klas === k).map((x) => x.docenten?.naam)
-              return <tr key={k}><td>{k}</td><td>{d.perKlas[k] || <span className="waarschuwing">0</span>}</td>
-                <td>{m.length ? m.join(', ') : <span className="waarschuwing">geen mentor</span>}</td></tr>
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }

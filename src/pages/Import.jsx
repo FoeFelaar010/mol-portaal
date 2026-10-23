@@ -119,7 +119,7 @@ export function leesWerknemers(rijen) {
   return null
 }
 
-export default function Import({ klaar }) {
+export default function Import({ klaar, ga }) {
   const [soort, setSoort] = useState('leerlingen')
   const [rijen, setRijen] = useState([])
   const [bestandNaam, setBestandNaam] = useState('')
@@ -145,6 +145,21 @@ export default function Import({ klaar }) {
     supabase.from(soort === 'leerlingen' ? 'leerlingen' : 'klas_mentoren').select(soort === 'leerlingen' ? 'id, email' : 'klas')
       .then(({ data: d }) => setBestaand(d || []))
   }, [soort, bezig])
+
+  // Stand van het portaal bovenaan de pagina
+  const [stand, setStand] = useState(null)
+  useEffect(() => {
+    Promise.all([supabase.from('leerlingen').select('klas'), supabase.from('klas_mentoren').select('klas, docent_id')])
+      .then(([ll, km]) => {
+        const klassen = new Set((ll.data || []).map((x) => x.klas))
+        const metMentor = new Set((km.data || []).map((x) => x.klas))
+        setStand({
+          leerlingen: (ll.data || []).length, klassen: klassen.size,
+          mentoren: new Set((km.data || []).map((x) => x.docent_id)).size,
+          zonderMentor: [...klassen].filter((k) => !metMentor.has(k)).sort(),
+        })
+      })
+  }, [bezig])
 
   function zetRijen(r, naam) {
     if (soort === 'mentoren') {
@@ -271,30 +286,59 @@ export default function Import({ klaar }) {
   const heeft = (id) => map[id] !== undefined
   const herkendOk = soort === 'leerlingen'
     ? heeft('klas') && (heeft('naam') || heeft('achternaam')) && (heeft('email') || heeft('nummer'))
-    : heeft('klas') && heeft('email')
+    : raster ? heeft('naam') : heeft('klas') && heeft('email')
   const zonderEmailKolom = soort === 'leerlingen' && map.email === undefined
   const voorbeeld = resultaat.ok.slice(0, 5)
   const mentorLijst = [...new Map(resultaat.ok.map((x) => [x.sleutel, x])).values()]
   const geraden = mentorLijst.filter((x) => x.bron === 'geraden').length
 
   return (
+    <>
+    {stand && (
+      <div className="kaart">
+        <h2>Import uit Zermelo</h2>
+        <p>Nu in het portaal: <strong>{stand.leerlingen} leerlingen</strong> in {stand.klassen} klassen · <strong>{stand.mentoren} mentoren</strong>.
+          {' '}{ga && <button className="link" onClick={() => ga('gebruikers')}>Bekijken of aanpassen</button>}</p>
+        {!!stand.zonderMentor.length && <p className="waarschuwing klein">Nog geen mentor: {stand.zonderMentor.join(', ')}. Importeer de mentoren (stap 2).</p>}
+        <p className="zacht klein">Importeren voegt toe en werkt bij; er gaat niets weg tenzij je dat aanvinkt. Losse wijzigingen doe je bij Klassen &amp; gebruikers.</p>
+      </div>
+    )}
     <div className="kaart">
       <div className="segment">
-        <button className={soort === 'leerlingen' ? 'actief' : ''} onClick={() => { setSoort('leerlingen'); setRijen([]) }}>Leerlingen</button>
-        <button className={soort === 'mentoren' ? 'actief' : ''} onClick={() => { setSoort('mentoren'); setRijen([]) }}>Mentoren</button>
+        <button className={soort === 'leerlingen' ? 'actief' : ''} onClick={() => { setSoort('leerlingen'); setRijen([]); setBericht(null) }}>1. Leerlingen</button>
+        <button className={soort === 'mentoren' ? 'actief' : ''} onClick={() => { setSoort('mentoren'); setRijen([]); setBericht(null) }}>2. Mentoren</button>
       </div>
 
       {soort === 'leerlingen' ? (
-        <p>Exporteer de leerlingenlijst uit Somtoday of Zermelo (Excel of CSV) en kies het bestand. Kolommen worden automatisch herkend.
-          Nodig: <strong>naam</strong>, <strong>klas</strong> en <strong>leerlingnummer of e-mail</strong>.</p>
+        <>
+          <p>Kies de <strong>leerlingen-export uit Zermelo</strong> (afdelingsdeelnames, Excel of CSV). Kolommen worden automatisch herkend:
+            leerlingcode, naam, stamklas en e-mail.</p>
+          <label className="bestand secundair">Leerlingen-export kiezen
+            <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestand} hidden />
+          </label>
+        </>
       ) : (
-        <p>Kies de mentorexport uit Zermelo (docenten met klassen) en de werknemers-export (voor de e-mailadressen), of plak één regel per mentor: <code>klas;naam;e-mail</code>. Twee mentoren? Dan twee regels met dezelfde klas.
-          De mentoren van de klassen in de lijst worden vervangen.</p>
+        <>
+          <p>Mentoren hebben twee bestanden uit Zermelo nodig. De mentoren van de klassen in de lijst worden vervangen.</p>
+          <ol className="stappen-import">
+            <li>
+              <label className="bestand secundair">a. Mentorexport kiezen
+                <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestand} hidden />
+              </label>
+              <span className="zacht klein">Docenten met per klas een “-” bij mentorschap.</span>
+              {rijen.length > 1 && <span className="label ok">{bestandNaam}</span>}
+            </li>
+            <li>
+              <label className="bestand secundair">b. Werknemers-export kiezen
+                <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestandWerknemers} hidden />
+              </label>
+              <span className="zacht klein">Voor de e-mailadressen (Gebruikerscode + Email).</span>
+              {werknemers && <span className="label ok">{Object.keys(werknemers).length} e-mailadressen</span>}
+            </li>
+          </ol>
+        </>
       )}
-
-      <label className="bestand secundair">Bestand kiezen (Excel of CSV)
-        <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestand} hidden />
-      </label>
+      {rijen.length <= 1 && melding}
       <details className="plakken">
         <summary>Of plak uit Excel</summary>
         <textarea rows={5} placeholder={soort === 'leerlingen' ? 'Leerlingnummer;Roepnaam;Tussenvoegsel;Achternaam;Stamklas\n312345;Sara;;Jansen;2A' : 'klas;naam;email\n2A;M. de Vries;m.devries@melanchthon.nl\n2A;J. Bakker;j.bakker@melanchthon.nl'}
@@ -326,15 +370,9 @@ export default function Import({ klaar }) {
           {raster && (
             <div className="kaart info">
               <strong>Mentorenoverzicht uit Zermelo herkend</strong> ({raster.length} klassen).
-              <p className="zacht klein">In deze export staan geen e-mailadressen. Kies daarom ook de <strong>werknemers-export</strong> uit Zermelo
-                (met Gebruikerscode en Email): de adressen worden dan op docentcode gekoppeld. Zonder die export worden ze geraden met het patroon hieronder.
-                Controleer ze en pas aan waar nodig: met dit adres logt de mentor straks in.</p>
-              <label className="bestand secundair">{werknemers ? 'Andere werknemers-export kiezen' : 'Werknemers-export kiezen (e-mailadressen)'}
-                <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestandWerknemers} hidden />
-              </label>
               <p className={geraden ? 'waarschuwing klein' : 'zacht klein'}>
-                {werknemers ? `${mentorLijst.length - geraden} van ${mentorLijst.length} e-mailadressen uit de werknemers-export.` : 'Nog geen werknemers-export gekozen.'}
-                {geraden ? ` ${geraden} geraden met het patroon: controleer die.` : ''}</p>
+                {werknemers ? `${mentorLijst.length - geraden} van ${mentorLijst.length} e-mailadressen uit de werknemers-export.` : 'Kies ook de werknemers-export (stap b) voor de juiste e-mailadressen.'}
+                {geraden ? ` ${geraden} geraden: controleer die.` : ''} Met dit adres logt de mentor in.</p>
               {!!geraden && (
                 <label>Patroon e-mail docent
                   <input value={mentorPatroon} onChange={(e) => setMentorPatroon(e.target.value)} />
@@ -373,7 +411,7 @@ export default function Import({ klaar }) {
           <div className="chips">
             {Object.entries(resultaat.klassen).sort().map(([k, n]) => <span key={k} className="chip">{k} · {n}</span>)}
           </div>
-          {!!voorbeeld.length && (
+          {soort === 'leerlingen' && !!voorbeeld.length && (
             <div className="scroll">
               <table className="tabel klein">
                 <thead><tr>{Object.keys(voorbeeld[0]).map((k) => <th key={k}>{k}</th>)}</tr></thead>
@@ -394,8 +432,8 @@ export default function Import({ klaar }) {
           </button>
         </>
       )}
-      {rijen.length <= 1 && melding}
     </div>
+    </>
   )
 }
 
