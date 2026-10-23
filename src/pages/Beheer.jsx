@@ -366,6 +366,21 @@ function Beheerders({ zelf }) {
     })
   }
 
+  // Wachtwoord instellen voor een andere beheerder (functie beheer_zet_wachtwoord, zie supabase/beheer-wachtwoord.sql)
+  const [wwVoor, setWwVoor] = useState(null)
+  const [ww, setWw] = useState({ a: '', b: '' })
+  async function zetWachtwoord(e, d) {
+    e.preventDefault()
+    await voer(async () => {
+      if (ww.a.length < 10) throw new Error('Kies een wachtwoord van minstens 10 tekens.')
+      if (ww.a !== ww.b) throw new Error('De wachtwoorden zijn niet gelijk.')
+      const { error } = await supabase.rpc('beheer_zet_wachtwoord', { p_email: d.email, p_ww: ww.a })
+      if (error) throw error.code === 'PGRST202' ? new Error('De functie ontbreekt nog in Supabase: voer supabase/beheer-wachtwoord.sql uit.') : error
+      setWwVoor(null)
+      setWw({ a: '', b: '' })
+    }, `Wachtwoord ingesteld voor ${d.naam}. Geef het persoonlijk door; ${d.naam} kan het daarna zelf wijzigen bij Meer.`)
+  }
+
   // Ingelogd met een wachtwoord-account? Dan kan de beheerder hier zijn wachtwoord wijzigen
   const [metWachtwoord, setMetWachtwoord] = useState(false)
   useEffect(() => {
@@ -401,8 +416,27 @@ function Beheerders({ zelf }) {
         <ul className="lijst">
           {lijst.map((d) => (
             <li key={d.id}>
-              <span><strong>{d.naam}</strong> <span className="zacht">{d.email}</span></span>
-              {d.id !== zelf.id && <button className="link" onClick={() => verwijder(d)}>Verwijderen</button>}
+              {wwVoor === d.id ? (
+                <form className="bewerk" onSubmit={(e) => zetWachtwoord(e, d)}>
+                  <strong>Wachtwoord voor {d.naam}</strong>
+                  <input type="password" autoComplete="new-password" placeholder="Nieuw wachtwoord (min. 10 tekens)" value={ww.a} onChange={(e) => setWw({ ...ww, a: e.target.value })} required minLength={10} />
+                  <input type="password" autoComplete="new-password" placeholder="Herhaal wachtwoord" value={ww.b} onChange={(e) => setWw({ ...ww, b: e.target.value })} required />
+                  <div className="knoppen">
+                    <button type="submit" disabled={bezig}>Opslaan</button>
+                    <button type="button" className="secundair" onClick={() => setWwVoor(null)}>Annuleren</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <span><strong>{d.naam}</strong> <span className="zacht">{d.email}</span></span>
+                  {d.id !== zelf.id && (
+                    <span className="rij-acties">
+                      <button className="link" onClick={() => { setWw({ a: '', b: '' }); setWwVoor(d.id) }}>Wachtwoord instellen</button>
+                      <button className="link" onClick={() => verwijder(d)}>Verwijderen</button>
+                    </span>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>
