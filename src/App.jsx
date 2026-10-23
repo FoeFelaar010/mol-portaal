@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase.js'
-import Login from './pages/Login.jsx'
+import { supabase, wachtwoordLink } from './lib/supabase.js'
+import Login, { NieuwWachtwoord } from './pages/Login.jsx'
 import Leerling from './pages/Leerling.jsx'
 import Mentor from './pages/Mentor.jsx'
 import Beheer from './pages/Beheer.jsx'
@@ -12,10 +12,15 @@ export default function App() {
   const [gebruiker, setGebruiker] = useState(null) // {type:'docent'|'leerling'|'onbekend', ...}
   const [weergave, setWeergave] = useState('mentor')
   const [versie, setVersie] = useState(0) // na kiezen testaccount opnieuw laden
+  // Uitnodigings- of herstel-link uit de mail: eerst een wachtwoord laten kiezen
+  const [nieuwWw, setNieuwWw] = useState(wachtwoordLink)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessie(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessie(s))
+    const { data } = supabase.auth.onAuthStateChange((e, s) => {
+      if (e === 'PASSWORD_RECOVERY') setNieuwWw(true)
+      setSessie(s)
+    })
     return () => data.subscription.unsubscribe()
   }, [])
 
@@ -29,6 +34,9 @@ export default function App() {
       }
       if (!email) { setGebruiker({ type: 'test' }); return }
       const { data: d } = await supabase.from('docenten').select('*').eq('email', email).maybeSingle()
+      // Wachtwoord-accounts zijn alleen voor beheerders; anderen loggen in met Microsoft
+      const alleenWachtwoord = !sessie.user.is_anonymous && (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
+      if (alleenWachtwoord && !d?.is_admin) { setGebruiker({ type: 'onbekend', email, wachtwoord: true }); return }
       if (d) { setGebruiker({ type: 'docent', ...d }); setWeergave(d.is_admin ? 'beheer' : 'mentor'); return }
       const { data: l } = await supabase.from('leerlingen').select('*').eq('email', email).maybeSingle()
       if (l) { setGebruiker({ type: 'leerling', ...l }); return }
@@ -59,19 +67,27 @@ export default function App() {
         )}
       </header>
       <main className="pagina">
+        {sessie && nieuwWw ? <NieuwWachtwoord klaar={() => { setNieuwWw(false); window.history.replaceState(null, '', window.location.pathname) }} /> : <>
         {(!sessie || gebruiker?.type === 'test') && <Login testSessie={gebruiker?.type === 'test'} klaar={() => setVersie((v) => v + 1)} />}
         {sessie && !gebruiker && <Laden />}
         {gebruiker?.type === 'onbekend' && (
           <div className="kaart">
             <h1>Geen toegang</h1>
-            <p>Het account <strong>{gebruiker.email}</strong> staat niet in de lijst van het MOL-portaal.</p>
-            <p>Ben je leerling? Meld je bij je mentor. Ben je docent? Meld je bij de beheerder.</p>
+            {gebruiker.wachtwoord ? (
+              <p>Inloggen met een wachtwoord kan alleen voor beheerders. Log in met <strong>Microsoft (schoolaccount)</strong>.</p>
+            ) : (
+              <>
+                <p>Het account <strong>{gebruiker.email}</strong> staat niet in de lijst van het MOL-portaal.</p>
+                <p>Ben je leerling? Meld je bij je mentor. Ben je docent? Meld je bij de beheerder.</p>
+              </>
+            )}
             <button onClick={uitloggen}>Uitloggen</button>
           </div>
         )}
         {gebruiker?.type === 'leerling' && <Leerling leerling={gebruiker} />}
         {gebruiker?.type === 'docent' && weergave === 'mentor' && <Mentor docent={gebruiker} />}
         {gebruiker?.type === 'docent' && weergave === 'beheer' && <Beheer docent={gebruiker} />}
+        </>}
       </main>
       <BevestigHost />
       <footer className="voet">

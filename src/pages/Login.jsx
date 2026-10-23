@@ -50,6 +50,7 @@ export default function Login({ testSessie, klaar }) {
       <p>Plan hier het gesprek tussen mentor, ouder(s) en leerling. Log in met je schoolaccount.</p>
       <button className="groot" onClick={microsoft}>Inloggen met Microsoft (schoolaccount)</button>
       <Melding type="fout">{fout}</Melding>
+      {!testSessie && <BeheerLogin />}
       {TESTLOGIN && (
         <div className="testmodus">
           <h3>Testmodus</h3>
@@ -78,5 +79,75 @@ export default function Login({ testSessie, klaar }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Reserve-inlog met e-mail en wachtwoord, alleen voor beheerders (account via uitnodiging in Supabase)
+function BeheerLogin() {
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [ww, setWw] = useState('')
+  const [bericht, setBericht] = useState(null)
+  const [bezig, setBezig] = useState(false)
+
+  async function inloggen(e) {
+    e.preventDefault()
+    setBezig(true)
+    setBericht(null)
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: ww })
+    setBezig(false)
+    if (error) setBericht({ type: 'fout', tekst: error.message === 'Invalid login credentials' ? 'E-mailadres of wachtwoord klopt niet.' : error.message })
+  }
+
+  async function vergeten() {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setBericht({ type: 'fout', tekst: 'Vul eerst je e-mailadres in.' }); return }
+    setBezig(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.href.split('#')[0] })
+    setBezig(false)
+    setBericht(error ? { type: 'fout', tekst: error.message } : { type: 'ok', tekst: 'Als dit adres een beheerdersaccount heeft, staat er een mail met een link in je inbox.' })
+  }
+
+  if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Beheerder? Inloggen met wachtwoord</button></p>
+  return (
+    <form className="beheer-login" onSubmit={inloggen}>
+      <h3>Inloggen als beheerder</h3>
+      <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+      <label>Wachtwoord<input type="password" autoComplete="current-password" value={ww} onChange={(e) => setWw(e.target.value)} required /></label>
+      {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
+      <div className="knoppen">
+        <button type="submit" disabled={bezig}>Inloggen</button>
+        <button type="button" className="link" onClick={vergeten} disabled={bezig}>Wachtwoord vergeten</button>
+      </div>
+    </form>
+  )
+}
+
+// Na een uitnodigings- of herstel-link: nieuw wachtwoord kiezen
+export function NieuwWachtwoord({ klaar }) {
+  const [ww, setWw] = useState('')
+  const [ww2, setWw2] = useState('')
+  const [fout, setFout] = useState('')
+  const [bezig, setBezig] = useState(false)
+
+  async function bewaar(e) {
+    e.preventDefault()
+    if (ww.length < 10) { setFout('Kies een wachtwoord van minstens 10 tekens.'); return }
+    if (ww !== ww2) { setFout('De wachtwoorden zijn niet gelijk.'); return }
+    setBezig(true)
+    const { error } = await supabase.auth.updateUser({ password: ww })
+    setBezig(false)
+    if (error) setFout(error.message)
+    else klaar()
+  }
+
+  return (
+    <form className="kaart smal" onSubmit={bewaar}>
+      <h1>Wachtwoord instellen</h1>
+      <p>Kies een wachtwoord voor je beheerdersaccount. Je logt daarna in via <em>Beheerder? Inloggen met wachtwoord</em>.</p>
+      <label>Nieuw wachtwoord<input type="password" autoComplete="new-password" value={ww} onChange={(e) => setWw(e.target.value)} required minLength={10} /></label>
+      <label>Herhaal wachtwoord<input type="password" autoComplete="new-password" value={ww2} onChange={(e) => setWw2(e.target.value)} required /></label>
+      <Melding type="fout">{fout}</Melding>
+      <button type="submit" disabled={bezig}>Opslaan</button>
+    </form>
   )
 }
