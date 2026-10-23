@@ -190,6 +190,9 @@ function Overzicht({ ronde, docent, data, laad }) {
 }
 
 // ---------------------------------------------------------- Beschikbaarheid
+// Naam voor leerlingen/ouders: ingestelde naam, anders voorletter + achternaam (zelfde als mentor_naam() in de database)
+const mentorNaam = (d) => d.weergavenaam || (d.naam.includes(' ') ? `${d.naam[0].toUpperCase()}. ${d.naam.slice(d.naam.indexOf(' ') + 1)}` : d.naam)
+
 const minuten = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
 
 function Beschikbaarheid({ ronde, docent, data, laad }) {
@@ -271,7 +274,7 @@ function Beschikbaarheid({ ronde, docent, data, laad }) {
     if (!form.lokaal || !form.datum) return []
     const per = {}
     for (const s of opDag.filter((x) => x.lokaal.toLowerCase() === form.lokaal.toLowerCase())) {
-      const p = per[s.docent_id] ??= { naam: s.docenten?.weergavenaam || s.docenten?.naam || '?', a: s.start, b: s.eind, zelf: s.docent_id === docent.id }
+      const p = per[s.docent_id] ??= { naam: s.docenten ? mentorNaam(s.docenten) : '?', a: s.start, b: s.eind, zelf: s.docent_id === docent.id }
       if (s.start < p.a) p.a = s.start
       if (s.eind > p.b) p.b = s.eind
     }
@@ -492,7 +495,8 @@ function Instellingen({ ronde, docent, data, laad }) {
     <>
       <form className="kaart" onSubmit={bewaarNaam}>
         <h2>Je naam voor leerlingen en ouders</h2>
-        <p className="zacht">Zo sta je in het portaal bij “Kies een moment”, bij de afspraak en onder je informatie. Leeg = {docent.naam}.</p>
+        <p className="zacht">Zo sta je in het portaal bij “Kies een moment”, bij de afspraak en onder je informatie.
+          Leeg laten = {mentorNaam({ ...docent, weergavenaam: null })}.</p>
         <div className="zoekrij">
           <input value={weergave} onChange={(e) => setWeergave(e.target.value)} maxLength={40} placeholder={`Bijv. Dhr. ${docent.naam.split(' ').slice(-1)[0]} of Mevr. ${docent.naam.split(' ').slice(-1)[0]}`} />
           <button type="submit" disabled={naamActie.bezig || weergave === (docent.weergavenaam || '')}>Opslaan</button>
@@ -667,7 +671,7 @@ Past geen van de momenten? Geeft u dat dan aan via dezelfde website; ik neem daa
 
 Met vriendelijke groet,
 
-${docent.weergavenaam || docent.naam}
+${mentorNaam(docent)}
 Mentor`
   return (
     <div className="kaart">
