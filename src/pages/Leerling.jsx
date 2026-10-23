@@ -135,11 +135,11 @@ function Ronde({ ronde, kijk }) {
           <h3>{dag(eigen.start)}</h3>
           <p>{tijd(eigen.start)} – {tijd(eigen.eind)} met <strong>{eigen.docent_naam}</strong>
             {eigen.lokaal && <> · lokaal <strong>{eigen.lokaal}</strong></>}</p>
-          {boeking?.door_mentor && <p className="zacht">Deze afspraak is in overleg door de mentor ingepland. Past het moment toch niet? Neem dan contact op met de mentor; wijzigen kan alleen via de mentor.</p>}
+          {boeking?.door_mentor && <p className="zacht">Deze afspraak is in overleg door de mentor ingepland.{open ? ' Past het moment toch niet? Kies dan via Verplaatsen een ander moment.' : ''}</p>}
           <div className="knoppen">
             <button onClick={agenda}>Zet in agenda</button>
-            {open && !boeking?.door_mentor && <button className="secundair" onClick={() => setVerplaats(!verplaats)}>{verplaats ? 'Niet verplaatsen' : 'Verplaatsen'}</button>}
-            {open && !boeking?.door_mentor && <button className="secundair" onClick={annuleer} disabled={bezig || !!kijk}>Annuleren</button>}
+            {open && <button className="secundair" onClick={() => setVerplaats(!verplaats)}>{verplaats ? 'Niet verplaatsen' : 'Verplaatsen'}</button>}
+            {open && <button className="secundair" onClick={annuleer} disabled={bezig || !!kijk}>Annuleren</button>}
           </div>
         </div>
       )}
@@ -158,7 +158,7 @@ function Ronde({ ronde, kijk }) {
         </div>
       )}
 
-      {open && !boeking?.door_mentor && (!eigen || verplaats) && perMentor.map((m) => (
+      {open && (!eigen || verplaats) && perMentor.map((m) => (
         <div key={m.docent_id} className="kaart">
           <h3>{eigen ? 'Ander moment kiezen' : 'Kies een moment'} · {m.naam}</h3>
           {m.vol && <p className="zacht">Deze mentor is vol. Kies een andere mentor.</p>}

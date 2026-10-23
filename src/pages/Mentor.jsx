@@ -334,7 +334,7 @@ function Inplannen({ data, laad }) {
   return (
     <form className="kaart" onSubmit={plan}>
       <h2>Leerling direct inplannen</h2>
-      <p className="zacht">Voor leerlingen die je zeker wilt spreken. De leerling ziet de afspraak en kan die niet zelf annuleren.
+      <p className="zacht">Voor leerlingen die je zeker wilt spreken. De leerling ziet de afspraak en kan die zolang de inschrijving open is nog zelf verplaatsen of annuleren.
         Een bestaande afspraak van de leerling wordt vervangen.</p>
       <div className="zoekrij">
         <input placeholder="Zoek leerling op naam, klas of e-mail (ook buiten je klas)" value={zoek}
