@@ -148,6 +148,18 @@ function Ronde({ ronde, laad }) {
     })
   }
 
+  const [dagBewerk, setDagBewerk] = useState(null) // { id, datum, van, tot }
+  async function bewaarDag(e) {
+    e.preventDefault()
+    await voer(async () => {
+      const { id, ...veld } = dagBewerk
+      const { error } = await supabase.from('ronde_dagen').update(veld).eq('id', id)
+      if (error) throw error.code === '23505' ? new Error('Deze dag bestaat al.') : error.code === '23514' ? new Error('De eindtijd moet na de begintijd liggen.') : error
+      setDagBewerk(null)
+      await laad()
+    }, 'Gespreksdag aangepast. Tijden die mentoren al hebben ingevuld blijven staan.')
+  }
+
   async function verwijderDag(d) {
     if (!await bevestig(`${datumLabel(d.datum)} verwijderen? Tijden die mentoren op deze dag al hebben ingevuld blijven staan.`)) return
     await voer(async () => {
@@ -175,10 +187,25 @@ function Ronde({ ronde, laad }) {
       <h3>1. Gespreksdagen</h3>
       <p className="zacht klein">Mentoren kunnen alleen binnen deze dagen en tijden hun beschikbaarheid invullen.</p>
       <ul className="lijst">
-        {dagen.map((d) => (
+        {dagen.map((d) => dagBewerk?.id === d.id ? (
+          <li key={d.id}>
+            <form className="bewerk" onSubmit={bewaarDag}>
+              <input type="date" value={dagBewerk.datum} onChange={(e) => setDagBewerk({ ...dagBewerk, datum: e.target.value })} required />
+              <input type="time" value={dagBewerk.van} onChange={(e) => setDagBewerk({ ...dagBewerk, van: e.target.value })} required />
+              <input type="time" value={dagBewerk.tot} onChange={(e) => setDagBewerk({ ...dagBewerk, tot: e.target.value })} required />
+              <div className="knoppen">
+                <button type="submit" disabled={bezig}>Opslaan</button>
+                <button type="button" className="secundair" onClick={() => setDagBewerk(null)}>Annuleren</button>
+              </div>
+            </form>
+          </li>
+        ) : (
           <li key={d.id}>
             <span>{datumLabel(d.datum)} · {hhmm(d.van)}–{hhmm(d.tot)}</span>
-            <button className="link" onClick={() => verwijderDag(d)}>Verwijderen</button>
+            <span className="rij-acties">
+              <button className="link" onClick={() => setDagBewerk({ id: d.id, datum: d.datum, van: hhmm(d.van), tot: hhmm(d.tot) })}>Wijzigen</button>
+              <button className="link" onClick={() => verwijderDag(d)}>Verwijderen</button>
+            </span>
           </li>
         ))}
         {!dagen.length && <li className="zacht">Nog geen dagen.</li>}
@@ -337,9 +364,14 @@ function Beheerders({ zelf }) {
   const [form, setForm] = useState({ naam: '', email: '' })
   const { bezig, voer, melding } = useActie()
 
+  const [wwStatus, setWwStatus] = useState({}) // email → { heeft_wachtwoord, laatst_ingelogd }
   const laad = useCallback(async () => {
-    const { data } = await supabase.from('docenten').select('*').eq('is_admin', true).order('naam')
+    const [{ data }, st] = await Promise.all([
+      supabase.from('docenten').select('*').eq('is_admin', true).order('naam'),
+      supabase.rpc('beheer_wachtwoord_status'),
+    ])
     setLijst(data || [])
+    setWwStatus(Object.fromEntries((st.data || []).map((x) => [x.email, x])))
   }, [])
   useEffect(() => { laad() }, [laad])
 
@@ -378,6 +410,7 @@ function Beheerders({ zelf }) {
       if (error) throw error.code === 'PGRST202' ? new Error('De functie ontbreekt nog in Supabase: voer supabase/beheer-wachtwoord.sql uit.') : error
       setWwVoor(null)
       setWw({ a: '', b: '' })
+      await laad()
     }, `Wachtwoord ingesteld voor ${d.naam}. Geef het persoonlijk door; ${d.naam} kan het daarna zelf wijzigen bij Meer.`)
   }
 
@@ -428,7 +461,12 @@ function Beheerders({ zelf }) {
                 </form>
               ) : (
                 <>
-                  <span><strong>{d.naam}</strong> <span className="zacht">{d.email}</span></span>
+                  <span><strong>{d.naam}</strong> <span className="zacht">{d.email}</span>
+                    {wwStatus[d.email] && (wwStatus[d.email].heeft_wachtwoord
+                      ? <span className="label ok">wachtwoord ingesteld</span>
+                      : <span className="label open">nog geen wachtwoord</span>)}
+                    {wwStatus[d.email]?.laatst_ingelogd && <span className="zacht klein"> · laatst ingelogd {dagTijd(wwStatus[d.email].laatst_ingelogd)}</span>}
+                  </span>
                   {d.id !== zelf.id && (
                     <span className="rij-acties">
                       <button className="link" onClick={() => { setWw({ a: '', b: '' }); setWwVoor(d.id) }}>Wachtwoord instellen</button>

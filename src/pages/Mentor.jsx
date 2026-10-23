@@ -192,7 +192,10 @@ function Overzicht({ ronde, docent, data, laad }) {
 // ---------------------------------------------------------- Beschikbaarheid
 function Beschikbaarheid({ ronde, data, laad }) {
   const { bezig, voer, melding, setBericht } = useActie()
-  const [form, setForm] = useState({ datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 5, lokaal: data.slots.at(-1)?.lokaal || '' })
+  const [form, setForm] = useState({
+    datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 5, lokaal: data.slots.at(-1)?.lokaal || '',
+    eetVan: SCHOOL.eetpauze?.[0] || '', eetTot: SCHOOL.eetpauze?.[1] || '',
+  })
   const zet = (k) => (e) => { setBericht(null); setForm({ ...form, [k]: e.target.value }) }
   const dagInfo = data.dagen.find((d) => d.datum === form.datum)
   const [lokalen, setLokalen] = useState([])
@@ -207,16 +210,27 @@ function Beschikbaarheid({ ronde, data, laad }) {
 
   async function maak(e) {
     e.preventDefault()
+    // Eetpauze: de tijden in twee delen maken (vóór en na de pauze)
+    const van = hhmm(form.van)
+    const tot = hhmm(form.tot)
+    const eet = form.eetVan && form.eetTot && form.eetVan < form.eetTot && form.eetVan < tot && form.eetTot > van
+    const delen = eet
+      ? [[van, form.eetVan < van ? van : form.eetVan], [form.eetTot > tot ? tot : form.eetTot, tot]].filter(([a, b]) => a < b)
+      : [[van, tot]]
     await voer(async () => {
-      const { data: n, error } = await supabase.rpc('genereer_slots', {
-        p_ronde: ronde.id, p_datum: form.datum, p_van: form.van, p_tot: form.tot,
-        p_duur: +form.duur, p_pauze_na: +form.pauzeNa || 0, p_pauze_min: +form.pauzeMin || 0,
-        p_lokaal: form.lokaal || null,
-      })
-      if (error) throw error
+      let n = 0
+      for (const [a, b] of delen) {
+        const { data: m, error } = await supabase.rpc('genereer_slots', {
+          p_ronde: ronde.id, p_datum: form.datum, p_van: a, p_tot: b,
+          p_duur: +form.duur, p_pauze_na: +form.pauzeNa || 0, p_pauze_min: +form.pauzeMin || 0,
+          p_lokaal: form.lokaal || null,
+        })
+        if (error) throw error
+        n += m || 0
+      }
       await laad()
       if (n === 0) throw new Error('Er zijn geen nieuwe tijdslots gemaakt. Ze overlappen met bestaande slots, of het lokaal is al bezet.')
-    }, 'Tijdslots toegevoegd.')
+    }, `Tijdslots toegevoegd${eet ? ` (eetpauze ${form.eetVan}–${form.eetTot} vrijgehouden)` : ''}.`)
   }
 
   async function verwijder(ids) {
@@ -249,8 +263,10 @@ function Beschikbaarheid({ ronde, data, laad }) {
             <datalist id="lokalen-lijst">{lokalen.map((l) => <option key={l} value={l} />)}</datalist></label>
           <label>Pauze na elke … gesprekken<input type="number" min="0" value={form.pauzeNa} onChange={zet('pauzeNa')} /></label>
           <label>Pauze (minuten)<input type="number" min="0" value={form.pauzeMin} onChange={zet('pauzeMin')} /></label>
+          <label>Eetpauze van<input type="time" value={form.eetVan} onChange={zet('eetVan')} /></label>
+          <label>Eetpauze tot<input type="time" value={form.eetTot} onChange={zet('eetTot')} /></label>
         </div>
-        <p className="zacht klein">Zet 0 bij ‘pauze na’ voor geen automatische pauze.</p>
+        <p className="zacht klein">Zet 0 bij ‘pauze na’ voor geen korte pauzes. Maak de eetpauze leeg als je die niet wilt; in de eetpauze worden geen gesprekken gepland.</p>
         {melding}
         <button type="submit" disabled={bezig || !form.datum}>Tijdslots maken</button>
       </form>
