@@ -78,7 +78,7 @@ function MentorRonde({ tab, ronde, docent }) {
   const [data, laad] = useMentorData(ronde, docent)
   if (!data) return <Laden />
   if (tab === 'overzicht') return <Overzicht ronde={ronde} docent={docent} data={data} laad={laad} />
-  if (tab === 'beschikbaarheid') return <Beschikbaarheid ronde={ronde} data={data} laad={laad} />
+  if (tab === 'beschikbaarheid') return <Beschikbaarheid ronde={ronde} docent={docent} data={data} laad={laad} />
   if (tab === 'inplannen') return <Inplannen data={data} laad={laad} />
   return <Instellingen ronde={ronde} docent={docent} data={data} laad={laad} />
 }
@@ -190,7 +190,9 @@ function Overzicht({ ronde, docent, data, laad }) {
 }
 
 // ---------------------------------------------------------- Beschikbaarheid
-function Beschikbaarheid({ ronde, data, laad }) {
+const minuten = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
+
+function Beschikbaarheid({ ronde, docent, data, laad }) {
   const { bezig, voer, melding, setBericht } = useActie()
   const [form, setForm] = useState({
     datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 15, lokaal: data.slots.at(-1)?.lokaal || '',
@@ -198,30 +200,87 @@ function Beschikbaarheid({ ronde, data, laad }) {
   })
   const zet = (k) => (e) => { setBericht(null); setForm({ ...form, [k]: e.target.value }) }
   const dagInfo = data.dagen.find((d) => d.datum === form.datum)
-  const [lokalen, setLokalen] = useState([])
+  const [lokalen, setLokalen] = useState([]) // [{naam, capaciteit}]
   const [lokaalAnders, setLokaalAnders] = useState(false) // zelf een lokaal typen dat niet in de lijst staat
   useEffect(() => {
-    supabase.from('lokalen').select('naam').order('volgorde').order('naam').then(({ data: d }) => {
-      const namen = (d || []).map((x) => x.naam)
-      setLokalen(namen)
-      if (form.lokaal && !namen.includes(form.lokaal)) setLokaalAnders(true)
+    supabase.from('lokalen').select('naam, capaciteit').order('volgorde').order('naam').then(({ data: d }) => {
+      setLokalen(d || [])
+      if (form.lokaal && !(d || []).some((x) => x.naam === form.lokaal)) setLokaalAnders(true)
     })
   }, []) // eslint-disable-line
+
+  // Alle tijden met een lokaal in deze ronde (ook van andere mentoren), om de bezetting te tonen
+  const [lokaalSlots, setLokaalSlots] = useState([])
+  const laadBezetting = useCallback(async () => {
+    const { data: d } = await supabase.from('slots').select('start, eind, lokaal, docent_id, docenten(naam, weergavenaam)')
+      .eq('ronde_id', ronde.id).not('lokaal', 'is', null)
+    setLokaalSlots(d || [])
+  }, [ronde.id])
+  useEffect(() => { laadBezetting() }, [laadBezetting])
 
   function kiesDag(e) {
     const d = data.dagen.find((x) => x.datum === e.target.value)
     setForm({ ...form, datum: e.target.value, van: hhmm(d?.van), tot: hhmm(d?.tot) })
   }
 
+  // De delen waarin tijden gemaakt worden (vóór en na de eetpauze)
+  const van = hhmm(form.van)
+  const tot = hhmm(form.tot)
+  const eet = form.eetVan && form.eetTot && form.eetVan < form.eetTot && form.eetVan < tot && form.eetTot > van
+  const delen = !van || !tot ? [] : eet
+    ? [[van, form.eetVan < van ? van : form.eetVan], [form.eetTot > tot ? tot : form.eetTot, tot]].filter(([a, b]) => a < b)
+    : [[van, tot]]
+
+  // Zelfde rekenwijze als genereer_slots: de tijden die gemaakt zouden worden, in minuten
+  const kandidaten = useMemo(() => {
+    const uit = []
+    const duur = +form.duur
+    if (!form.datum || !(duur >= 5)) return uit
+    for (const [a, b] of delen) {
+      let t = minuten(a)
+      let n = 0
+      while (t + duur <= minuten(b)) {
+        uit.push([t, t + duur])
+        n += 1
+        t += duur
+        if (+form.pauzeNa > 0 && n % +form.pauzeNa === 0) t += +form.pauzeMin || 0
+      }
+    }
+    return uit
+  }, [form.datum, form.duur, form.pauzeNa, form.pauzeMin, JSON.stringify(delen)]) // eslint-disable-line
+
+  // Bezetting per lokaal op de gekozen dag, binnen de gekozen tijden
+  const opDag = lokaalSlots.filter((s) => dagKey(s.start) === form.datum)
+    .map((s) => ({ ...s, a: minuten(tijd(s.start)), b: minuten(tijd(s.eind)) }))
+  function bezetting(naam) {
+    const cap = lokalen.find((l) => l.naam.toLowerCase() === naam.toLowerCase())?.capaciteit ?? 2
+    const hier = opDag.filter((s) => s.lokaal.toLowerCase() === naam.toLowerCase())
+    const tellingen = kandidaten.map(([a, b]) => hier.filter((s) => s.a < b && s.b > a).length)
+    const vol = tellingen.filter((n) => n >= cap).length
+    return { cap, vol, totaal: kandidaten.length, piek: Math.max(0, ...tellingen), hier }
+  }
+  function lokaalLabel(naam) {
+    if (!kandidaten.length) return naam
+    const b = bezetting(naam)
+    if (b.vol === b.totaal) return `${naam} — vol`
+    if (b.vol) return `${naam} — deels vol (${b.vol} van ${b.totaal} tijden)`
+    return b.piek ? `${naam} — ${b.piek}/${b.cap} in gebruik` : `${naam} — vrij (0/${b.cap})`
+  }
+  // Wie het gekozen lokaal die dag gebruikt (per docent eerste–laatste tijd)
+  const gebruikers = (() => {
+    if (!form.lokaal || !form.datum) return []
+    const per = {}
+    for (const s of opDag.filter((x) => x.lokaal.toLowerCase() === form.lokaal.toLowerCase())) {
+      const p = per[s.docent_id] ??= { naam: s.docenten?.weergavenaam || s.docenten?.naam || '?', a: s.start, b: s.eind, zelf: s.docent_id === docent.id }
+      if (s.start < p.a) p.a = s.start
+      if (s.eind > p.b) p.b = s.eind
+    }
+    return Object.values(per).sort((x, y) => x.a.localeCompare(y.a))
+  })()
+
   async function maak(e) {
     e.preventDefault()
-    // Eetpauze: de tijden in twee delen maken (vóór en na de pauze)
-    const van = hhmm(form.van)
-    const tot = hhmm(form.tot)
-    const eet = form.eetVan && form.eetTot && form.eetVan < form.eetTot && form.eetVan < tot && form.eetTot > van
-    const delen = eet
-      ? [[van, form.eetVan < van ? van : form.eetVan], [form.eetTot > tot ? tot : form.eetTot, tot]].filter(([a, b]) => a < b)
-      : [[van, tot]]
+    const verwacht = kandidaten.length
     await voer(async () => {
       let n = 0
       for (const [a, b] of delen) {
@@ -233,14 +292,17 @@ function Beschikbaarheid({ ronde, data, laad }) {
         if (error) throw error
         n += m || 0
       }
-      await laad()
+      await Promise.all([laad(), laadBezetting()])
+      const alBezet = data.slots.some((s) => dagKey(s.start) === form.datum && tijd(s.start) < tot && tijd(s.eind) > van)
+      const reden = alBezet && form.lokaal ? 'je had daar al tijden, of het lokaal was vol'
+        : alBezet ? 'je had daar al tijden' : `lokaal ${form.lokaal} was op die tijden vol`
       if (n === 0) {
-        const alBezet = data.slots.some((s) => dagKey(s.start) === form.datum && tijd(s.start) < tot && tijd(s.eind) > van)
         throw new Error(alBezet
           ? `Er zijn geen nieuwe tijdslots gemaakt: je hebt op ${datumLabel(form.datum)} al tijden in dit tijdvak. Verwijder die eerst hieronder, of kies andere tijden.`
           : `Er zijn geen nieuwe tijdslots gemaakt: lokaal ${form.lokaal} is op die tijden al vol. Kies een ander lokaal.`)
       }
-    }, `Tijdslots toegevoegd${eet ? ` (eetpauze ${form.eetVan}–${form.eetTot} vrijgehouden)` : ''}.`)
+      if (n < verwacht) throw new Error(`${n} van de ${verwacht} tijden gemaakt; ${verwacht - n} overgeslagen (${reden}).`)
+    }, `${kandidaten.length} tijdslots toegevoegd${eet ? ` (eetpauze ${form.eetVan}–${form.eetTot} vrijgehouden)` : ''}.`)
   }
 
   async function verwijder(ids) {
@@ -248,7 +310,7 @@ function Beschikbaarheid({ ronde, data, laad }) {
     await voer(async () => {
       const { error } = await supabase.from('slots').delete().in('id', ids)
       if (error) throw error
-      await laad()
+      await Promise.all([laad(), laadBezetting()])
     })
   }
 
@@ -276,10 +338,20 @@ function Beschikbaarheid({ ronde, data, laad }) {
               else { setLokaalAnders(false); setForm({ ...form, lokaal: e.target.value }) }
             }}>
               <option value="">Geen lokaal</option>
-              {lokalen.map((l) => <option key={l} value={l}>{l}</option>)}
+              {lokalen.map((l) => {
+                const b = kandidaten.length ? bezetting(l.naam) : null
+                return <option key={l.naam} value={l.naam} disabled={!!b && b.vol === b.totaal && l.naam !== form.lokaal}>{lokaalLabel(l.naam)}</option>
+              })}
               <option value="__anders">Ander lokaal…</option>
             </select>
             {lokaalAnders && <input value={form.lokaal} onChange={zet('lokaal')} placeholder="Typ het lokaal" maxLength={20} autoFocus />}
+            {!kandidaten.length && <span className="zacht klein">Kies eerst een dag en tijden; dan zie je per lokaal hoe vol het is.</span>}
+            {form.lokaal && kandidaten.length > 0 && (
+              <span className={bezetting(form.lokaal).vol ? 'waarschuwing klein' : 'zacht klein'}>
+                {lokaalLabel(form.lokaal).replace(`${form.lokaal} — `, `${form.lokaal}: `)}
+                {gebruikers.length ? ` · die dag in gebruik door ${gebruikers.map((g) => `${g.zelf ? 'jou' : g.naam} ${tijd(g.a)}–${tijd(g.b)}`).join(', ')}` : ''}
+              </span>
+            )}
           </label>
           <label>Pauze na elke … gesprekken<input type="number" min="0" value={form.pauzeNa} onChange={zet('pauzeNa')} /></label>
           <label>Pauze (minuten)<input type="number" min="0" step="5" value={form.pauzeMin} onChange={zet('pauzeMin')} /></label>
