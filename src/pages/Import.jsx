@@ -99,6 +99,26 @@ async function leesRijen(file) {
 
 const hoofdKlas = (k) => String(k || '').trim().toUpperCase()
 
+// Werknemers-export uit Zermelo (Gebruikerscode + Email): geeft { code: email } of null als het die export niet is
+const CODE_WOORDEN = ['gebruikerscode', 'werknemerscode', 'docentcode', 'afkorting', 'code']
+const MAIL_WOORDEN = ['email', 'e-mail', 'e-mailadres', 'emailadres', 'mail']
+export function leesWerknemers(rijen) {
+  for (let i = 0; i < Math.min(rijen.length, 5); i++) {
+    const kop = rijen[i].map(norm)
+    const c = kop.findIndex((k) => CODE_WOORDEN.includes(k))
+    const m = kop.findIndex((k) => MAIL_WOORDEN.includes(k))
+    if (c < 0 || m < 0) continue
+    const lijst = {}
+    for (const r of rijen.slice(i + 1)) {
+      const code = String(r[c] ?? '').trim().toLowerCase()
+      const mail = String(r[m] ?? '').trim().toLowerCase()
+      if (code && /^\S+@\S+\.\S+$/.test(mail)) lijst[code] = mail
+    }
+    return Object.keys(lijst).length ? lijst : null
+  }
+  return null
+}
+
 export default function Import({ klaar }) {
   const [soort, setSoort] = useState('leerlingen')
   const [rijen, setRijen] = useState([])
@@ -118,6 +138,7 @@ export default function Import({ klaar }) {
     try { return localStorage.getItem('mol-mentorpatroon') || SCHOOL.docentEmail } catch { return SCHOOL.docentEmail }
   })
   const [emailEigen, setEmailEigen] = useState({})
+  const [werknemers, setWerknemers] = useState(null) // { code: email } uit de werknemers-export
   const raster = soort === 'mentoren' ? isRaster(koppen, data, map) : null
 
   useEffect(() => {
@@ -126,6 +147,13 @@ export default function Import({ klaar }) {
   }, [soort, bezig])
 
   function zetRijen(r, naam) {
+    if (soort === 'mentoren') {
+      // Werknemers-export gekozen? Dan alleen de e-mailadressen onthouden
+      const kop = kiesKop(r, soort)
+      const m = herken(r[kop] || [], soort)
+      const w = m.klas === undefined && !isRaster(r[kop] || [], r.slice(kop + 1), m) ? leesWerknemers(r) : null
+      if (w) { zetWerknemers(w); return }
+    }
     setRijen(r)
     setBestandNaam(naam)
     setMap(herken(r[kiesKop(r, soort)] || [], soort))
@@ -139,6 +167,23 @@ export default function Import({ klaar }) {
     e.target.value = ''
     if (!f) return
     try { zetRijen(await leesRijen(f), f.name) } catch (err) { setBericht({ type: 'fout', tekst: 'Bestand kon niet gelezen worden: ' + err.message }) }
+  }
+
+  function zetWerknemers(w) {
+    setWerknemers(w)
+    setEmailEigen({})
+    setBericht({ type: 'ok', tekst: `Werknemers-export ingelezen: ${Object.keys(w).length} e-mailadressen. Kies nu (ook) de mentorexport.` })
+  }
+
+  async function bestandWerknemers(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    try {
+      const w = leesWerknemers(await leesRijen(f))
+      if (!w) throw new Error('geen kolommen Gebruikerscode en Email gevonden')
+      zetWerknemers(w)
+    } catch (err) { setBericht({ type: 'fout', tekst: 'Werknemers-export kon niet gelezen worden: ' + err.message }) }
   }
 
   // Omzetten naar records + controle
@@ -161,11 +206,13 @@ export default function Import({ klaar }) {
         const code = kolom(r, 'code')
         const d = docentDelen(kolom(r, 'naam'), kolom(r, 'voornaam'))
         const sleutel = code || d.volledig
-        const email = (emailEigen[sleutel] ?? (kolom(r, 'email') || maakEmail(mentorPatroon, d, code))).toLowerCase().trim()
+        const uitExport = kolom(r, 'email') || werknemers?.[code.toLowerCase()]
+        const bron = emailEigen[sleutel] !== undefined ? 'aangepast' : uitExport ? 'export' : 'geraden'
+        const email = (emailEigen[sleutel] ?? (uitExport || maakEmail(mentorPatroon, d, code))).toLowerCase().trim()
         for (const k of raster) {
           if (!String(r[k] ?? '').trim()) continue
           if (!/^\S+@\S+\.\S+$/.test(email)) fouten.push(`Regel ${regel}: geen geldig e-mailadres voor ${d.volledig}`)
-          else ok.push({ klas: hoofdKlas(koppen[k]), naam: d.volledig, email, sleutel })
+          else ok.push({ klas: hoofdKlas(koppen[k]), naam: d.volledig, email, sleutel, bron })
         }
       } else {
         const klas = hoofdKlas(kolom(r, 'klas'))
@@ -182,7 +229,7 @@ export default function Import({ klaar }) {
     const klassen = {}
     for (const x of uniek) klassen[x.klas] = (klassen[x.klas] || 0) + 1
     return { ok: uniek, fouten, dubbel: ok.length - uniek.length, klassen }
-  }, [data, map, patroon, soort, raster, mentorPatroon, emailEigen, kopIndex, koppen])
+  }, [data, map, patroon, soort, raster, mentorPatroon, emailEigen, werknemers, kopIndex, koppen])
 
   const nieuweEmails = new Set(resultaat.ok.map((x) => x.email))
   const nietMeer = soort === 'leerlingen' ? bestaand.filter((b) => !nieuweEmails.has(b.email)) : []
@@ -227,6 +274,8 @@ export default function Import({ klaar }) {
     : heeft('klas') && heeft('email')
   const zonderEmailKolom = soort === 'leerlingen' && map.email === undefined
   const voorbeeld = resultaat.ok.slice(0, 5)
+  const mentorLijst = [...new Map(resultaat.ok.map((x) => [x.sleutel, x])).values()]
+  const geraden = mentorLijst.filter((x) => x.bron === 'geraden').length
 
   return (
     <div className="kaart">
@@ -239,7 +288,7 @@ export default function Import({ klaar }) {
         <p>Exporteer de leerlingenlijst uit Somtoday of Zermelo (Excel of CSV) en kies het bestand. Kolommen worden automatisch herkend.
           Nodig: <strong>naam</strong>, <strong>klas</strong> en <strong>leerlingnummer of e-mail</strong>.</p>
       ) : (
-        <p>Kies de mentorexport uit Zermelo (docenten met klassen), of plak één regel per mentor: <code>klas;naam;e-mail</code>. Twee mentoren? Dan twee regels met dezelfde klas.
+        <p>Kies de mentorexport uit Zermelo (docenten met klassen) en de werknemers-export (voor de e-mailadressen), of plak één regel per mentor: <code>klas;naam;e-mail</code>. Twee mentoren? Dan twee regels met dezelfde klas.
           De mentoren van de klassen in de lijst worden vervangen.</p>
       )}
 
@@ -277,21 +326,31 @@ export default function Import({ klaar }) {
           {raster && (
             <div className="kaart info">
               <strong>Mentorenoverzicht uit Zermelo herkend</strong> ({raster.length} klassen).
-              <p className="zacht klein">In deze export staan geen e-mailadressen. Ze worden gemaakt met het patroon hieronder.
+              <p className="zacht klein">In deze export staan geen e-mailadressen. Kies daarom ook de <strong>werknemers-export</strong> uit Zermelo
+                (met Gebruikerscode en Email): de adressen worden dan op docentcode gekoppeld. Zonder die export worden ze geraden met het patroon hieronder.
                 Controleer ze en pas aan waar nodig: met dit adres logt de mentor straks in.</p>
-              <label>Patroon e-mail docent
-                <input value={mentorPatroon} onChange={(e) => setMentorPatroon(e.target.value)} />
-                <span className="zacht klein">Mogelijk: {'{v}'} = eerste letter voornaam, {'{voornaam}'}, {'{tussen}'}, {'{achternaam}'}, {'{code}'}</span>
+              <label className="bestand secundair">{werknemers ? 'Andere werknemers-export kiezen' : 'Werknemers-export kiezen (e-mailadressen)'}
+                <input type="file" accept=".csv,.txt,.xlsx,.xls,.ods" onChange={bestandWerknemers} hidden />
               </label>
+              <p className={geraden ? 'waarschuwing klein' : 'zacht klein'}>
+                {werknemers ? `${mentorLijst.length - geraden} van ${mentorLijst.length} e-mailadressen uit de werknemers-export.` : 'Nog geen werknemers-export gekozen.'}
+                {geraden ? ` ${geraden} geraden met het patroon: controleer die.` : ''}</p>
+              {!!geraden && (
+                <label>Patroon e-mail docent
+                  <input value={mentorPatroon} onChange={(e) => setMentorPatroon(e.target.value)} />
+                  <span className="zacht klein">Mogelijk: {'{v}'} = eerste letter voornaam, {'{voornaam}'}, {'{tussen}'}, {'{achternaam}'}, {'{code}'}</span>
+                </label>
+              )}
               <div className="scroll">
                 <table className="tabel klein">
                   <thead><tr><th>Mentor</th><th>Klas</th><th>E-mail</th></tr></thead>
                   <tbody>
-                    {[...new Map(resultaat.ok.map((x) => [x.sleutel, x])).values()].map((x) => (
+                    {mentorLijst.map((x) => (
                       <tr key={x.sleutel}>
                         <td>{x.naam}</td>
                         <td>{resultaat.ok.filter((y) => y.sleutel === x.sleutel).map((y) => y.klas).join(', ')}</td>
-                        <td><input value={emailEigen[x.sleutel] ?? x.email} onChange={(e) => setEmailEigen({ ...emailEigen, [x.sleutel]: e.target.value })} /></td>
+                        <td><input value={emailEigen[x.sleutel] ?? x.email} onChange={(e) => setEmailEigen({ ...emailEigen, [x.sleutel]: e.target.value })} />
+                          {x.bron === 'geraden' && <span className="label open">geraden</span>}</td>
                       </tr>
                     ))}
                   </tbody>
