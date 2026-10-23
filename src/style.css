@@ -113,6 +113,11 @@ code.code { font-size: 1.05rem; letter-spacing: .08em; font-weight: 600; }
 .slot-icoon { margin-left: 8px; }
 .slot-label { margin-left: 8px; }
 .chip select.cap { width: auto; margin: 0 2px 0 6px; padding: 0 4px; font-size: .85rem; border: 0; background: transparent; }
+.of { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; color: var(--zacht); font-size: .85rem; }
+.of::before, .of::after { content: ''; flex: 1; border-top: 1px solid var(--rand); }
+button.anders-knop { display: block; margin: 0 auto; }
+.anders { margin-top: 12px; }
+.anders .segment { margin-top: 0; }
 .beheer-login { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rand); }
 .lijst li form.bewerk { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
 .lijst li form.bewerk input { margin: 0; }

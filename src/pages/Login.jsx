@@ -4,6 +4,8 @@ import { Melding } from '../components/ui.jsx'
 
 export default function Login({ klaar }) {
   const [fout, setFout] = useState('')
+  const [anders, setAnders] = useState(false) // "Andere manier van inloggen" open?
+  const [keuze, setKeuze] = useState('code') // 'code' | 'beheer'
 
   async function microsoft() {
     setFout('')
@@ -20,15 +22,25 @@ export default function Login({ klaar }) {
       <p>Plan hier het gesprek tussen mentor, ouder(s) en leerling. Log in met je schoolaccount.</p>
       <button className="groot" onClick={microsoft}>Inloggen met Microsoft (schoolaccount)</button>
       <Melding type="fout">{fout}</Melding>
-      <CodeLogin klaar={klaar} />
-      <BeheerLogin />
+      <div className="of"><span>of</span></div>
+      <button className="link anders-knop" aria-expanded={anders} onClick={() => setAnders(!anders)}>
+        Andere manier van inloggen <span aria-hidden="true">{anders ? '▴' : '▾'}</span>
+      </button>
+      {anders && (
+        <div className="anders">
+          <div className="segment">
+            <button className={keuze === 'code' ? 'actief' : ''} onClick={() => setKeuze('code')}>Inlogcode (leerling)</button>
+            <button className={keuze === 'beheer' ? 'actief' : ''} onClick={() => setKeuze('beheer')}>Beheerder</button>
+          </div>
+          {keuze === 'code' ? <CodeLogin klaar={klaar} /> : <BeheerLogin />}
+        </div>
+      )}
     </div>
   )
 }
 
 // Leerling zonder (werkend) Office 365-account: inloggen met de code van de mentor
 function CodeLogin({ klaar }) {
-  const [open, setOpen] = useState(false)
   const [code, setCode] = useState('')
   const [fout, setFout] = useState('')
   const [bezig, setBezig] = useState(false)
@@ -55,12 +67,10 @@ function CodeLogin({ klaar }) {
     }
   }
 
-  if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Leerling met een inlogcode van je mentor?</button></p>
   return (
-    <form className="beheer-login" onSubmit={inloggen}>
-      <h3>Inloggen met inlogcode</h3>
-      <p className="zacht klein">Gebruik dit alleen als je nog niet met je schoolaccount kunt inloggen.</p>
-      <label>Inlogcode<input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Bijv. K7QM-3XRT"
+    <form onSubmit={inloggen}>
+      <p className="zacht klein">Voor leerlingen die nog niet met hun schoolaccount kunnen inloggen. De code krijg je van je mentor.</p>
+      <label>Inlogcode<input autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Bijv. K7QM-3XRT"
         autoComplete="off" autoCapitalize="characters" spellCheck={false} required minLength={8} maxLength={12} /></label>
       <Melding type="fout">{fout}</Melding>
       <button type="submit" disabled={bezig}>Inloggen</button>
@@ -71,7 +81,6 @@ function CodeLogin({ klaar }) {
 // Reserve-inlog met e-mail en wachtwoord, alleen voor beheerders.
 // Geen mail-links: de linkcontrole van Outlook gebruikt eenmalige links al op.
 function BeheerLogin() {
-  const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [ww, setWw] = useState('')
   const [bericht, setBericht] = useState(null)
@@ -86,11 +95,10 @@ function BeheerLogin() {
     if (error) setBericht({ type: 'fout', tekst: error.message === 'Invalid login credentials' ? 'E-mailadres of wachtwoord klopt niet.' : error.message })
   }
 
-  if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Beheerder? Inloggen met wachtwoord</button></p>
   return (
-    <form className="beheer-login" onSubmit={inloggen}>
-      <h3>Inloggen als beheerder</h3>
-      <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+    <form onSubmit={inloggen}>
+      <p className="zacht klein">Alleen voor beheerders van het portaal.</p>
+      <label>E-mail<input autoFocus type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
       <label>Wachtwoord<input type="password" autoComplete="current-password" value={ww} onChange={(e) => setWw(e.target.value)} required /></label>
       {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
       <button type="submit" disabled={bezig}>Inloggen</button>
