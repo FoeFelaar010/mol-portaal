@@ -229,7 +229,7 @@ function Beschikbaarheid({ ronde, data, laad }) {
         n += m || 0
       }
       await laad()
-      if (n === 0) throw new Error('Er zijn geen nieuwe tijdslots gemaakt. Ze overlappen met bestaande slots, of het lokaal is al bezet.')
+      if (n === 0) throw new Error('Er zijn geen nieuwe tijdslots gemaakt. Ze overlappen met je bestaande tijden, of het lokaal is op dat moment vol (meestal max. 2 gesprekken tegelijk).')
     }, `Tijdslots toegevoegd${eet ? ` (eetpauze ${form.eetVan}–${form.eetTot} vrijgehouden)` : ''}.`)
   }
 

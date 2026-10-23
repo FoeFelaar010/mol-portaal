@@ -463,8 +463,8 @@ function Beheerders({ zelf }) {
                 <>
                   <span><strong>{d.naam}</strong> <span className="zacht">{d.email}</span>
                     {wwStatus[d.email] && (wwStatus[d.email].heeft_wachtwoord
-                      ? <span className="label ok">wachtwoord ingesteld</span>
-                      : <span className="label open">nog geen wachtwoord</span>)}
+                      ? <span className="slot-icoon" role="img" aria-label="Wachtwoord ingesteld" title="Wachtwoord ingesteld">🔒</span>
+                      : <span className="label open slot-label">nog geen wachtwoord</span>)}
                     {wwStatus[d.email]?.laatst_ingelogd && <span className="zacht klein"> · laatst ingelogd {dagTijd(wwStatus[d.email].laatst_ingelogd)}</span>}
                   </span>
                   {d.id !== zelf.id && (
@@ -518,7 +518,7 @@ function LokalenBeheer() {
   const [nieuw, setNieuw] = useState('')
   const { bezig, voer, melding } = useActie()
   const laad = useCallback(async () => {
-    const { data } = await supabase.from('lokalen').select('naam, volgorde').order('volgorde').order('naam')
+    const { data } = await supabase.from('lokalen').select('naam, volgorde, capaciteit').order('volgorde').order('naam')
     setLijst(data || [])
   }, [])
   useEffect(() => { laad() }, [laad])
@@ -534,6 +534,13 @@ function LokalenBeheer() {
       await laad()
     })
   }
+  async function zetCapaciteit(naam, capaciteit) {
+    await voer(async () => {
+      const { error } = await supabase.from('lokalen').update({ capaciteit }).eq('naam', naam)
+      if (error) throw error
+      await laad()
+    }, `${naam}: maximaal ${capaciteit} gesprek${capaciteit === 1 ? '' : 'ken'} tegelijk.`)
+  }
   async function verwijder(naam) {
     if (!await bevestig(`Lokaal ${naam} uit de lijst halen? Bestaande afspraken in dit lokaal blijven staan.`, { knop: 'Uit lijst halen' })) return
     await voer(async () => {
@@ -545,10 +552,15 @@ function LokalenBeheer() {
   return (
     <div className="kaart">
       <h2>Lokalen</h2>
-      <p className="zacht klein">Mentoren kiezen uit deze lijst bij het invullen van hun tijden (of typen zelf een lokaal).</p>
+      <p className="zacht klein">Mentoren kiezen uit deze lijst bij het invullen van hun tijden (of typen zelf een lokaal).
+        Het getal is het aantal gesprekken dat tegelijk in het lokaal mag (standaard 2, kleine kamers 1). Een lokaal dat niet in de lijst staat: 2.</p>
       <div className="chips">
         {lijst.map((l) => (
           <span key={l.naam} className="chip">{l.naam}
+            <select className="cap" value={l.capaciteit ?? 2} disabled={bezig} aria-label={`Gesprekken tegelijk in ${l.naam}`}
+              onChange={(e) => zetCapaciteit(l.naam, +e.target.value)}>
+              {[1, 2, 3].map((n) => <option key={n} value={n}>{n}×</option>)}
+            </select>
             <button className="link" aria-label={`${l.naam} verwijderen`} onClick={() => verwijder(l.naam)}>✕</button>
           </span>
         ))}
