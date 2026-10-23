@@ -4,6 +4,7 @@ import { dag, datumLabel, dagTijd, hhmm, naarInput, tijd, vanInput } from '../li
 import { download, maakCsv } from '../lib/files.js'
 import { KopieerKnop, Laden, LeerlingLijst, Tabs, Voortgang, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import Import from './Import.jsx'
+import Gebruikers from './Gebruikers.jsx'
 
 export default function Beheer({ docent }) {
   const [tab, setTab] = useState('start')
@@ -13,10 +14,11 @@ export default function Beheer({ docent }) {
     <>
       <h1>Beheer</h1>
       <Tabs actief={tab} kies={setTab} tabs={[
-        ['start', 'Start'], ['import', 'Lijsten'], ['rondes', 'Rondes'], ['overzicht', 'Overzicht'], ['beheerders', 'Meer'],
+        ['start', 'Start'], ['import', 'Lijsten'], ['gebruikers', 'Klassen & gebruikers'], ['rondes', 'Rondes'], ['overzicht', 'Overzicht'], ['beheerders', 'Meer'],
       ]} />
       {tab === 'start' && <Start key={versie} ga={setTab} />}
       {tab === 'import' && <><Import klaar={ververs} /><Klassen key={versie} /></>}
+      {tab === 'gebruikers' && <Gebruikers zelf={docent} />}
       {tab === 'rondes' && <Rondes />}
       {tab === 'overzicht' && <Overzicht />}
       {tab === 'beheerders' && <Beheerders zelf={docent} />}
@@ -53,7 +55,7 @@ function Start({ ga }) {
   const openNu = s.ronde?.open && (!s.ronde.inschrijven_vanaf || nu >= new Date(s.ronde.inschrijven_vanaf)) && (!s.ronde.inschrijven_tot || nu < new Date(s.ronde.inschrijven_tot))
   const stappen = [
     { ok: s.leerlingen > 0, titel: 'Leerlingen importeren', tekst: s.leerlingen ? `${s.leerlingen} leerlingen in ${s.klassen} klassen` : 'Export uit Somtoday of Zermelo', tab: 'import' },
-    { ok: s.klassen > 0 && !s.zonderMentor.length, titel: 'Mentoren koppelen', tekst: s.zonderMentor.length ? `Nog geen mentor: ${s.zonderMentor.join(', ')}` : s.klassen ? 'Alle klassen hebben een mentor' : '', tab: 'import' },
+    { ok: s.klassen > 0 && !s.zonderMentor.length, titel: 'Mentoren koppelen', tekst: s.zonderMentor.length ? `Nog geen mentor: ${s.zonderMentor.join(', ')}` : s.klassen ? 'Alle klassen hebben een mentor' : '', tab: 'gebruikers' },
     { ok: !!s.ronde && s.ronde.ronde_dagen.length > 0 && !!s.ronde.inschrijven_tot, titel: 'Gespreksronde aanmaken', tekst: s.ronde ? `${s.ronde.naam} · ${s.ronde.ronde_dagen.length} gespreksdag(en)${s.ronde.inschrijven_tot ? '' : ' · sluitdatum ontbreekt'}` : 'Naam, gespreksdagen en sluitdatum', tab: 'rondes' },
     { ok: s.mentorenMetTijden > 0 && s.mentorenMetTijden >= s.mentorTotaal, titel: 'Mentoren vullen hun tijden in', tekst: s.ronde ? `${s.mentorenMetTijden} mentor(en) hebben tijden ingevuld` : 'Na stap 3', tab: 'overzicht' },
     { ok: openNu, titel: 'Inschrijving openen', tekst: openNu ? `Open tot ${dagTijd(s.ronde.inschrijven_tot)} · ${s.boekingen} ingeschreven` : 'Zet de ronde open bij Rondes', tab: 'rondes' },

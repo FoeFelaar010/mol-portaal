@@ -94,6 +94,12 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chip { background: var(--paars-licht); border-radius: 999px; padding: 2px 4px 2px 12px; display: inline-flex; align-items: center; }
+.tabel .chips { margin: 0; align-items: center; }
+.tabel .chips select { width: auto; margin: 0; padding: 2px 6px; }
+.zoekrij select { width: auto; margin: 0; }
+.lijst li form.bewerk { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
+.lijst li form.bewerk input { margin: 0; }
+.lijst li form.bewerk .knoppen { grid-column: 1 / -1; }
 .schakel { display: flex; align-items: center; gap: 8px; margin: 0; }
 .schakel input { width: 22px; height: 22px; min-height: 0; margin: 0; accent-color: var(--paars); }
 .radio { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
