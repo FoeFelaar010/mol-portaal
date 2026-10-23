@@ -21,7 +21,10 @@ export default function App() {
       if (e === 'PASSWORD_RECOVERY') setNieuwWw(true)
       setSessie(s)
     })
-    return () => data.subscription.unsubscribe()
+    // Code uit de herstelmail ingevuld (Login.jsx): daarna wachtwoord laten kiezen
+    const naCode = () => setNieuwWw(true)
+    window.addEventListener('mol-nieuw-wachtwoord', naCode)
+    return () => { data.subscription.unsubscribe(); window.removeEventListener('mol-nieuw-wachtwoord', naCode) }
   }, [])
 
   useEffect(() => {

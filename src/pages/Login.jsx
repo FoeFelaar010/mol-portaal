@@ -89,6 +89,8 @@ function BeheerLogin() {
   const [ww, setWw] = useState('')
   const [bericht, setBericht] = useState(null)
   const [bezig, setBezig] = useState(false)
+  const [codeStap, setCodeStap] = useState(false)
+  const [code, setCode] = useState('')
 
   async function inloggen(e) {
     e.preventDefault()
@@ -104,7 +106,36 @@ function BeheerLogin() {
     setBezig(true)
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.href.split('#')[0] })
     setBezig(false)
-    setBericht(error ? { type: 'fout', tekst: error.message } : { type: 'ok', tekst: 'Als dit adres een beheerdersaccount heeft, staat er een mail met een link in je inbox.' })
+    if (error) { setBericht({ type: 'fout', tekst: error.message }); return }
+    setBericht(null)
+    setCodeStap(true)
+  }
+
+  // Code uit de mail (een link werkt niet: de linkcontrole van Outlook gebruikt die al op)
+  async function controleerCode(e) {
+    e.preventDefault()
+    setBezig(true)
+    setBericht(null)
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\s/g, ''), type: 'recovery' })
+    setBezig(false)
+    if (!error) window.dispatchEvent(new Event('mol-nieuw-wachtwoord'))
+    else setBericht({ type: 'fout', tekst: /expired|invalid/i.test(error.message) ? 'Deze code klopt niet of is verlopen. Vraag een nieuwe aan.' : error.message })
+  }
+
+  if (codeStap) {
+    return (
+      <form className="beheer-login" onSubmit={controleerCode}>
+        <h3>Code invullen</h3>
+        <p className="zacht klein">Als <strong>{email.trim().toLowerCase()}</strong> een beheerdersaccount heeft, staat er een mail met een code in je inbox
+          (kijk ook bij ongewenste e-mail). De code is 1 uur geldig.</p>
+        <label>Code uit de mail<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required minLength={6} maxLength={10} /></label>
+        {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
+        <div className="knoppen">
+          <button type="submit" disabled={bezig}>Doorgaan</button>
+          <button type="button" className="link" onClick={() => { setCodeStap(false); setCode('') }}>Terug</button>
+        </div>
+      </form>
+    )
   }
 
   if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Beheerder? Inloggen met wachtwoord</button></p>
