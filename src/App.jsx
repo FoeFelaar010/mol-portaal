@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase, wachtwoordLink } from './lib/supabase.js'
-import Login, { NieuwWachtwoord } from './pages/Login.jsx'
+import { supabase } from './lib/supabase.js'
+import Login from './pages/Login.jsx'
 import Leerling from './pages/Leerling.jsx'
 import Mentor from './pages/Mentor.jsx'
 import Beheer from './pages/Beheer.jsx'
@@ -12,19 +12,11 @@ export default function App() {
   const [gebruiker, setGebruiker] = useState(null) // {type:'docent'|'leerling'|'onbekend', ...}
   const [weergave, setWeergave] = useState('mentor')
   const [versie, setVersie] = useState(0) // na kiezen testaccount opnieuw laden
-  // Uitnodigings- of herstel-link uit de mail: eerst een wachtwoord laten kiezen
-  const [nieuwWw, setNieuwWw] = useState(wachtwoordLink)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessie(data.session))
-    const { data } = supabase.auth.onAuthStateChange((e, s) => {
-      if (e === 'PASSWORD_RECOVERY') setNieuwWw(true)
-      setSessie(s)
-    })
-    // Code uit de herstelmail ingevuld (Login.jsx): daarna wachtwoord laten kiezen
-    const naCode = () => setNieuwWw(true)
-    window.addEventListener('mol-nieuw-wachtwoord', naCode)
-    return () => { data.subscription.unsubscribe(); window.removeEventListener('mol-nieuw-wachtwoord', naCode) }
+    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessie(s))
+    return () => data.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -70,7 +62,6 @@ export default function App() {
         )}
       </header>
       <main className="pagina">
-        {sessie && nieuwWw ? <NieuwWachtwoord klaar={() => { setNieuwWw(false); window.history.replaceState(null, '', window.location.pathname) }} /> : <>
         {(!sessie || gebruiker?.type === 'test') && <Login testSessie={gebruiker?.type === 'test'} klaar={() => setVersie((v) => v + 1)} />}
         {sessie && !gebruiker && <Laden />}
         {gebruiker?.type === 'onbekend' && (
@@ -90,7 +81,6 @@ export default function App() {
         {gebruiker?.type === 'leerling' && <Leerling leerling={gebruiker} />}
         {gebruiker?.type === 'docent' && weergave === 'mentor' && <Mentor docent={gebruiker} />}
         {gebruiker?.type === 'docent' && weergave === 'beheer' && <Beheer docent={gebruiker} />}
-        </>}
       </main>
       <BevestigHost />
       <footer className="voet">

@@ -82,15 +82,14 @@ export default function Login({ testSessie, klaar }) {
   )
 }
 
-// Reserve-inlog met e-mail en wachtwoord, alleen voor beheerders (account via uitnodiging in Supabase)
+// Reserve-inlog met e-mail en wachtwoord, alleen voor beheerders.
+// Geen mail-links: de linkcontrole van Outlook gebruikt eenmalige links al op.
 function BeheerLogin() {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [ww, setWw] = useState('')
   const [bericht, setBericht] = useState(null)
   const [bezig, setBezig] = useState(false)
-  const [codeStap, setCodeStap] = useState(false)
-  const [code, setCode] = useState('')
 
   async function inloggen(e) {
     e.preventDefault()
@@ -101,43 +100,6 @@ function BeheerLogin() {
     if (error) setBericht({ type: 'fout', tekst: error.message === 'Invalid login credentials' ? 'E-mailadres of wachtwoord klopt niet.' : error.message })
   }
 
-  async function vergeten() {
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setBericht({ type: 'fout', tekst: 'Vul eerst je e-mailadres in.' }); return }
-    setBezig(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.href.split('#')[0] })
-    setBezig(false)
-    if (error) { setBericht({ type: 'fout', tekst: error.message }); return }
-    setBericht(null)
-    setCodeStap(true)
-  }
-
-  // Code uit de mail (een link werkt niet: de linkcontrole van Outlook gebruikt die al op)
-  async function controleerCode(e) {
-    e.preventDefault()
-    setBezig(true)
-    setBericht(null)
-    const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\s/g, ''), type: 'recovery' })
-    setBezig(false)
-    if (!error) window.dispatchEvent(new Event('mol-nieuw-wachtwoord'))
-    else setBericht({ type: 'fout', tekst: /expired|invalid/i.test(error.message) ? 'Deze code klopt niet of is verlopen. Vraag een nieuwe aan.' : error.message })
-  }
-
-  if (codeStap) {
-    return (
-      <form className="beheer-login" onSubmit={controleerCode}>
-        <h3>Code invullen</h3>
-        <p className="zacht klein">Als <strong>{email.trim().toLowerCase()}</strong> een beheerdersaccount heeft, staat er een mail met een code in je inbox
-          (kijk ook bij ongewenste e-mail). De code is 1 uur geldig.</p>
-        <label>Code uit de mail<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required minLength={6} maxLength={10} /></label>
-        {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
-        <div className="knoppen">
-          <button type="submit" disabled={bezig}>Doorgaan</button>
-          <button type="button" className="link" onClick={() => { setCodeStap(false); setCode('') }}>Terug</button>
-        </div>
-      </form>
-    )
-  }
-
   if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Beheerder? Inloggen met wachtwoord</button></p>
   return (
     <form className="beheer-login" onSubmit={inloggen}>
@@ -145,40 +107,39 @@ function BeheerLogin() {
       <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
       <label>Wachtwoord<input type="password" autoComplete="current-password" value={ww} onChange={(e) => setWw(e.target.value)} required /></label>
       {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
-      <div className="knoppen">
-        <button type="submit" disabled={bezig}>Inloggen</button>
-        <button type="button" className="link" onClick={vergeten} disabled={bezig}>Wachtwoord vergeten</button>
-      </div>
+      <button type="submit" disabled={bezig}>Inloggen</button>
+      <p className="zacht klein">Wachtwoord vergeten? Vraag de beheerder van het portaal om een nieuw wachtwoord.</p>
     </form>
   )
 }
 
-// Na een uitnodigings- of herstel-link: nieuw wachtwoord kiezen
-export function NieuwWachtwoord({ klaar }) {
+// Eigen wachtwoord wijzigen (ingelogde beheerder, bij Beheer → Meer)
+export function WachtwoordWijzigen() {
   const [ww, setWw] = useState('')
   const [ww2, setWw2] = useState('')
-  const [fout, setFout] = useState('')
+  const [bericht, setBericht] = useState(null)
   const [bezig, setBezig] = useState(false)
 
   async function bewaar(e) {
     e.preventDefault()
-    if (ww.length < 10) { setFout('Kies een wachtwoord van minstens 10 tekens.'); return }
-    if (ww !== ww2) { setFout('De wachtwoorden zijn niet gelijk.'); return }
+    if (ww.length < 10) { setBericht({ type: 'fout', tekst: 'Kies een wachtwoord van minstens 10 tekens.' }); return }
+    if (ww !== ww2) { setBericht({ type: 'fout', tekst: 'De wachtwoorden zijn niet gelijk.' }); return }
     setBezig(true)
     const { error } = await supabase.auth.updateUser({ password: ww })
     setBezig(false)
-    if (error) setFout(error.message)
-    else klaar()
+    if (error) setBericht({ type: 'fout', tekst: error.message })
+    else { setBericht({ type: 'ok', tekst: 'Je wachtwoord is gewijzigd.' }); setWw(''); setWw2('') }
   }
 
   return (
-    <form className="kaart smal" onSubmit={bewaar}>
-      <h1>Wachtwoord instellen</h1>
-      <p>Kies een wachtwoord voor je beheerdersaccount. Je logt daarna in via <em>Beheerder? Inloggen met wachtwoord</em>.</p>
-      <label>Nieuw wachtwoord<input type="password" autoComplete="new-password" value={ww} onChange={(e) => setWw(e.target.value)} required minLength={10} /></label>
-      <label>Herhaal wachtwoord<input type="password" autoComplete="new-password" value={ww2} onChange={(e) => setWw2(e.target.value)} required /></label>
-      <Melding type="fout">{fout}</Melding>
-      <button type="submit" disabled={bezig}>Opslaan</button>
+    <form className="kaart" onSubmit={bewaar}>
+      <h2>Mijn wachtwoord</h2>
+      <div className="raster2">
+        <label>Nieuw wachtwoord<input type="password" autoComplete="new-password" value={ww} onChange={(e) => setWw(e.target.value)} required minLength={10} /></label>
+        <label>Herhaal wachtwoord<input type="password" autoComplete="new-password" value={ww2} onChange={(e) => setWw2(e.target.value)} required /></label>
+      </div>
+      {bericht && <Melding type={bericht.type}>{bericht.tekst}</Melding>}
+      <button type="submit" disabled={bezig}>Wachtwoord wijzigen</button>
     </form>
   )
 }

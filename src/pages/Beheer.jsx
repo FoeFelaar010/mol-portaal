@@ -5,6 +5,7 @@ import { download, maakCsv } from '../lib/files.js'
 import { KopieerKnop, Laden, LeerlingLijst, Tabs, Voortgang, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import Import from './Import.jsx'
 import Gebruikers from './Gebruikers.jsx'
+import { WachtwoordWijzigen } from './Login.jsx'
 
 export default function Beheer({ docent }) {
   const [tab, setTab] = useState('start')
@@ -365,6 +366,12 @@ function Beheerders({ zelf }) {
     })
   }
 
+  // Ingelogd met een wachtwoord-account? Dan kan de beheerder hier zijn wachtwoord wijzigen
+  const [metWachtwoord, setMetWachtwoord] = useState(false)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMetWachtwoord((data.user?.app_metadata?.providers || []).includes('email')))
+  }, [])
+
   const [testmodus, setTestmodus] = useState(null)
   useEffect(() => {
     supabase.from('instellingen').select('testmodus').eq('id', 1).maybeSingle().then(({ data }) => setTestmodus(data?.testmodus ?? null))
@@ -407,6 +414,7 @@ function Beheerders({ zelf }) {
           <button type="submit" disabled={bezig}>Beheerder toevoegen</button>
         </form>
       </div>
+      {metWachtwoord && <WachtwoordWijzigen />}
       <LokalenBeheer />
       {testmodus !== null && (
         <div className="kaart">
