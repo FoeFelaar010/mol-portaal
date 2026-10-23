@@ -98,6 +98,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .tabel .chips select { width: auto; margin: 0; padding: 2px 6px; }
 .zoekrij select { width: auto; margin: 0; }
 .bekijk-als { border: 2px dashed var(--rand); border-radius: 16px; padding: 4px 16px 16px; margin-top: 12px; }
+.codeknoppen { flex-wrap: wrap; align-items: center; margin: 4px 0 8px; }
+.sso-vink { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; margin: 0 4px; cursor: pointer; }
+.sso-vink input { width: auto; margin: 0; }
+code.code { font-size: 1.05rem; letter-spacing: .08em; font-weight: 600; }
+@media print {
+  body.print-codes * { visibility: hidden; }
+  body.print-codes .codelijst, body.print-codes .codelijst * { visibility: visible; }
+  body.print-codes .codelijst { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
+}
 .stappen-import { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 10px; }
 .stappen-import li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .stappen-import .bestand { margin: 0; }

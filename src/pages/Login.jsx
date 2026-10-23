@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { Melding } from '../components/ui.jsx'
 
-export default function Login() {
+export default function Login({ klaar }) {
   const [fout, setFout] = useState('')
 
   async function microsoft() {
@@ -20,8 +20,51 @@ export default function Login() {
       <p>Plan hier het gesprek tussen mentor, ouder(s) en leerling. Log in met je schoolaccount.</p>
       <button className="groot" onClick={microsoft}>Inloggen met Microsoft (schoolaccount)</button>
       <Melding type="fout">{fout}</Melding>
+      <CodeLogin klaar={klaar} />
       <BeheerLogin />
     </div>
+  )
+}
+
+// Leerling zonder (werkend) Office 365-account: inloggen met de code van de mentor
+function CodeLogin({ klaar }) {
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
+  const [fout, setFout] = useState('')
+  const [bezig, setBezig] = useState(false)
+
+  async function inloggen(e) {
+    e.preventDefault()
+    setFout('')
+    setBezig(true)
+    try {
+      const { data: s } = await supabase.auth.getSession()
+      if (!s.session?.user?.is_anonymous) {
+        const { error } = await supabase.auth.signInAnonymously()
+        if (error) throw error
+      }
+      const { data, error } = await supabase.rpc('code_inloggen', { p_code: code })
+      if (error) throw error
+      if (data === 'ok') { klaar?.(); return }
+      setFout(data === 'teveel' ? 'Te veel pogingen. Probeer het over een kwartier opnieuw.'
+        : 'Deze code klopt niet of werkt niet meer. Log dan in met je schoolaccount, of vraag je mentor om een nieuwe code.')
+    } catch (err) {
+      setFout('Inloggen met code lukt nu niet: ' + (err.message || err))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  if (!open) return <p className="kan-niet-link"><button className="link" onClick={() => setOpen(true)}>Leerling met een inlogcode van je mentor?</button></p>
+  return (
+    <form className="beheer-login" onSubmit={inloggen}>
+      <h3>Inloggen met inlogcode</h3>
+      <p className="zacht klein">Gebruik dit alleen als je nog niet met je schoolaccount kunt inloggen.</p>
+      <label>Inlogcode<input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Bijv. K7QM-3XRT"
+        autoComplete="off" autoCapitalize="characters" spellCheck={false} required minLength={8} maxLength={12} /></label>
+      <Melding type="fout">{fout}</Melding>
+      <button type="submit" disabled={bezig}>Inloggen</button>
+    </form>
   )
 }
 

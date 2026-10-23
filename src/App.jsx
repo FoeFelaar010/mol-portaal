@@ -11,6 +11,7 @@ export default function App() {
   const [sessie, setSessie] = useState(undefined)
   const [gebruiker, setGebruiker] = useState(null) // {type:'docent'|'leerling'|'onbekend', ...}
   const [weergave, setWeergave] = useState('mentor')
+  const [versie, setVersie] = useState(0) // na inloggen met code opnieuw bepalen wie er is
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessie(data.session))
@@ -21,19 +22,23 @@ export default function App() {
   useEffect(() => {
     if (!sessie) { setGebruiker(null); return }
     ;(async () => {
-      const email = (sessie.user.email || '').toLowerCase()
-      // Oude anonieme sessie (testmodus bestaat niet meer): uitloggen
-      if (!email || sessie.user.is_anonymous) { await supabase.auth.signOut(); return }
+      let email = (sessie.user.email || '').toLowerCase()
+      if (sessie.user.is_anonymous) {
+        // Inloggen met inlogcode: de database koppelt deze sessie aan een leerling (zolang SSO niet aan staat)
+        const { data } = await supabase.rpc('my_email')
+        email = (data || '').toLowerCase()
+        if (!email) { setGebruiker({ type: 'anoniem' }); return }
+      }
       const { data: d } = await supabase.from('docenten').select('*').eq('email', email).maybeSingle()
       // Wachtwoord-accounts zijn alleen voor beheerders; anderen loggen in met Microsoft
-      const alleenWachtwoord = (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
+      const alleenWachtwoord = !sessie.user.is_anonymous && (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
       if (alleenWachtwoord && !d?.is_admin) { setGebruiker({ type: 'onbekend', email, wachtwoord: true }); return }
       if (d) { setGebruiker({ type: 'docent', ...d }); setWeergave(d.is_admin ? 'beheer' : 'mentor'); return }
       const { data: l } = await supabase.from('leerlingen').select('*').eq('email', email).maybeSingle()
       if (l) { setGebruiker({ type: 'leerling', ...l }); return }
       setGebruiker({ type: 'onbekend', email })
     })()
-  }, [sessie])
+  }, [sessie, versie])
 
   const uitloggen = () => supabase.auth.signOut()
 
@@ -46,7 +51,7 @@ export default function App() {
           <img src="./logo.png" alt={SCHOOL.naam} className="logo-img" />
           <span className="app-naam">MOL-gesprekken</span>
         </div>
-        {sessie && (
+        {sessie && gebruiker?.type !== 'anoniem' && (
           <div className="kop-acties">
             {gebruiker?.type === 'docent' && gebruiker.is_admin && (
               <button className="kop-knop" onClick={() => setWeergave(weergave === 'beheer' ? 'mentor' : 'beheer')}>
@@ -58,8 +63,9 @@ export default function App() {
         )}
       </header>
       <main className="pagina">
-        {!sessie && <Login />}
-        {sessie && !gebruiker && <Laden />}
+        {/* Anonieme sessie zonder (geldige) code: inlogscherm blijft staan, ook tijdens het controleren */}
+        {(!sessie || gebruiker?.type === 'anoniem' || (sessie.user.is_anonymous && !gebruiker)) && <Login klaar={() => setVersie((v) => v + 1)} />}
+        {sessie && !sessie.user.is_anonymous && !gebruiker && <Laden />}
         {gebruiker?.type === 'onbekend' && (
           <div className="kaart">
             <h1>Geen toegang</h1>

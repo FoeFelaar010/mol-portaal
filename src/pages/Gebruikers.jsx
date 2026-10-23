@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { Laden, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import Leerling from './Leerling.jsx'
+import { download, maakCsv } from '../lib/files.js'
 
 const hoofdKlas = (k) => String(k || '').trim().toUpperCase()
 const geldigMail = (m) => /^\S+@\S+\.\S+$/.test(m)
@@ -14,12 +15,16 @@ export default function Gebruikers({ zelf }) {
   const [bekijk, setBekijk] = useState(null) // leerling waarvan de beheerder het scherm bekijkt
 
   const laad = useCallback(async () => {
-    const [doc, ll, km] = await Promise.all([
+    const [doc, ll, km, cs] = await Promise.all([
       supabase.from('docenten').select('*').order('naam'),
       supabase.from('leerlingen').select('*').order('naam'),
       supabase.from('klas_mentoren').select('klas, docent_id'),
+      supabase.rpc('beheer_code_status'),
     ])
-    setD({ docenten: doc.data || [], leerlingen: ll.data || [], km: km.data || [] })
+    setD({
+      docenten: doc.data || [], leerlingen: ll.data || [], km: km.data || [],
+      codes: Object.fromEntries((cs.data || []).map((x) => [x.leerling_id, x.aangemaakt])),
+    })
   }, [])
   useEffect(() => { laad() }, [laad])
 
@@ -320,6 +325,45 @@ function Leerlingen({ d, laad, bekijk }) {
     }, `${ids.length} leerlingen verwijderd.`)
   }
 
+  // --- Inlogcodes en SSO (zie supabase/inlogcodes.sql) ---
+  const [nieuweCodes, setNieuweCodes] = useState(null) // [{naam, klas, code}] — alleen nu zichtbaar
+  const groep = klas || zoek ? `deze ${gevonden.length} leerlingen` : `alle ${gevonden.length} leerlingen`
+  const zonderSso = gevonden.filter((l) => !l.sso)
+
+  async function maakCodes() {
+    if (!zonderSso.length) return
+    const metCode = zonderSso.filter((l) => d.codes[l.id]).length
+    if (!await bevestig(`Inlogcodes maken voor ${zonderSso.length} leerling${zonderSso.length === 1 ? '' : 'en'} zonder SSO?`
+      + (metCode ? ` ${metCode} van hen ${metCode === 1 ? 'heeft' : 'hebben'} al een code; die werkt daarna niet meer.` : '')
+      + ' De codes zijn maar één keer te zien: print ze of sla ze op.', { knop: 'Codes maken' })) return
+    await voer(async () => {
+      const { data, error } = await supabase.rpc('maak_inlogcodes', { p_leerlingen: zonderSso.map((l) => l.id) })
+      if (error) throw error
+      setNieuweCodes(data || [])
+      await laad()
+    }, 'Inlogcodes gemaakt.')
+  }
+
+  async function zetSso(ids, aan) {
+    if (!ids.length) return
+    if (ids.length > 1 && !await bevestig(aan
+      ? `SSO aanzetten voor ${ids.length} leerlingen? Hun inlogcodes werken dan direct niet meer; ze loggen in met Office 365.`
+      : `SSO uitzetten voor ${ids.length} leerlingen? Ze hebben dan een nieuwe inlogcode nodig.`, { knop: aan ? 'SSO aanzetten' : 'SSO uitzetten' })) return
+    await voer(async () => {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await supabase.rpc('zet_sso', { p_leerlingen: ids.slice(i, i + 200), p_aan: aan })
+        if (error) throw error
+      }
+      await laad()
+    }, `SSO ${aan ? 'aan' : 'uit'} voor ${ids.length} leerling${ids.length === 1 ? '' : 'en'}.`)
+  }
+
+  function printCodes() {
+    document.body.classList.add('print-codes')
+    window.print()
+    setTimeout(() => document.body.classList.remove('print-codes'), 500)
+  }
+
   async function verwijder(l) {
     const { count } = await supabase.from('boekingen').select('id', { count: 'exact', head: true }).eq('leerling_id', l.id)
     const tekst = `${l.naam} (${l.klas}) verwijderen?` + (count ? ` Ook ${count === 1 ? 'de afspraak' : `${count} afspraken`} van deze leerling ${count === 1 ? 'wordt' : 'worden'} verwijderd.` : '')
@@ -342,6 +386,35 @@ function Leerlingen({ d, laad, bekijk }) {
         </select>
       </div>
       {melding}
+      {nieuweCodes && (
+        <div className="kaart info codelijst">
+          <div className="kop-rij">
+            <h3>Inlogcodes ({nieuweCodes.length})</h3>
+            <div className="knoppen">
+              <button className="secundair" onClick={printCodes}>Printen</button>
+              <button className="secundair" onClick={() => download('mol-inlogcodes.csv', maakCsv([['Klas', 'Leerling', 'Inlogcode'],
+                ...nieuweCodes.map((c) => [c.klas, c.naam, c.code])]), 'text/csv;charset=utf-8')}>Excel (.csv)</button>
+              <button className="link" onClick={() => setNieuweCodes(null)}>Sluiten</button>
+            </div>
+          </div>
+          <p className="zacht klein">Alleen nu zichtbaar. Geef elke leerling persoonlijk zijn of haar code. Inloggen: MOL-portaal → “Leerling met een inlogcode van je mentor?”.
+            De code werkt tot SSO bij de leerling aan staat.</p>
+          <div className="scroll">
+            <table className="tabel">
+              <thead><tr><th>Klas</th><th>Leerling</th><th>Inlogcode</th></tr></thead>
+              <tbody>{nieuweCodes.map((c) => <tr key={c.leerling_id}><td>{c.klas}</td><td>{c.naam}</td><td><code className="code">{c.code}</code></td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {!!gevonden.length && (
+        <div className="knoppen codeknoppen">
+          <span className="zacht klein">Voor {groep} · {gevonden.filter((l) => l.sso).length} met SSO, {zonderSso.filter((l) => d.codes[l.id]).length} met code:</span>
+          <button className="secundair" disabled={bezig || !zonderSso.length} onClick={maakCodes}>Inlogcodes maken ({zonderSso.length})</button>
+          <button className="secundair" disabled={bezig || !zonderSso.length} onClick={() => zetSso(zonderSso.map((l) => l.id), true)}>SSO aan ({zonderSso.length})</button>
+          <button className="link" disabled={bezig || zonderSso.length === gevonden.length} onClick={() => zetSso(gevonden.filter((l) => l.sso).map((l) => l.id), false)}>SSO uit</button>
+        </div>
+      )}
       <ul className="lijst">
         {lijst.map((l) => bewerk?.id === l.id ? (
           <li key={l.id}>
@@ -363,6 +436,12 @@ function Leerlingen({ d, laad, bekijk }) {
               <div className="zacht klein">{l.email}{l.leerlingnummer ? ` · ${l.leerlingnummer}` : ''}</div>
             </div>
             <div className="rij-acties">
+              {!l.sso && (d.codes[l.id]
+                ? <span className="label" title={`Code gemaakt ${new Date(d.codes[l.id]).toLocaleDateString('nl-NL')}`}>code</span>
+                : <span className="label open">geen code</span>)}
+              <label className="sso-vink" title="Aan = inloggen met Office 365; de inlogcode werkt niet meer">
+                <input type="checkbox" checked={!!l.sso} disabled={bezig} onChange={(e) => zetSso([l.id], e.target.checked)} /> SSO
+              </label>
               <button className="link" onClick={() => { bekijk(l); window.scrollTo(0, 0) }}>Bekijken</button>
               <button className="link" onClick={() => setBewerk({ ...l })}>Wijzigen</button>
               <button className="link" disabled={bezig} onClick={() => verwijder(l)}>Verwijderen</button>
