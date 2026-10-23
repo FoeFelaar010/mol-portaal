@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { Laden, useActie, bevestig } from '../components/ui.jsx'
+import { Laden, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 
 const hoofdKlas = (k) => String(k || '').trim().toUpperCase()
 const geldigMail = (m) => /^\S+@\S+\.\S+$/.test(m)
@@ -65,6 +65,34 @@ function Klassen({ d, laad }) {
     }, 'Mentor ontkoppeld.')
   }
 
+  // Klas weg: leerlingen (met hun afspraken), mentorkoppelingen en klasinstellingen
+  async function verwijderKlas(klas) {
+    const ids = d.leerlingen.filter((l) => l.klas === klas).map((l) => l.id)
+    const nMentor = d.km.filter((x) => x.klas === klas).length
+    let nAfspraak = 0
+    if (ids.length) {
+      const { count } = await supabase.from('boekingen').select('id', { count: 'exact', head: true }).in('leerling_id', ids)
+      nAfspraak = count || 0
+    }
+    const gevolgen = [
+      ids.length && `${ids.length} leerling${ids.length === 1 ? '' : 'en'}`,
+      nAfspraak && `${nAfspraak} afspra${nAfspraak === 1 ? 'ak' : 'ken'}`,
+      nMentor && `${nMentor} mentorkoppeling${nMentor === 1 ? '' : 'en'}`,
+    ].filter(Boolean)
+    const tekst = `Klas ${klas} verwijderen?` + (gevolgen.length ? ` Dit verwijdert: ${gevolgen.join(', ')}.` : '') + ' De docenten zelf blijven staan.'
+    const ok = ids.length
+      ? await bevestigTyp(`${tekst} Typ VERWIJDER om door te gaan.`)
+      : await bevestig(tekst, { knop: 'Verwijderen', gevaar: true })
+    if (!ok) return
+    await voer(async () => {
+      for (const [tabel, filter] of [['leerlingen', 'klas'], ['klas_mentoren', 'klas'], ['klas_instelling', 'klas']]) {
+        const { error } = await supabase.from(tabel).delete().eq(filter, klas)
+        if (error) throw error
+      }
+      await laad()
+    }, `Klas ${klas} is verwijderd.`)
+  }
+
   return (
     <div className="kaart">
       <h2>Mentoren per klas</h2>
@@ -72,7 +100,7 @@ function Klassen({ d, laad }) {
       {melding}
       <div className="scroll">
         <table className="tabel">
-          <thead><tr><th>Klas</th><th>Leerlingen</th><th>Mentor(en)</th></tr></thead>
+          <thead><tr><th>Klas</th><th>Leerlingen</th><th>Mentor(en)</th><th></th></tr></thead>
           <tbody>
             {klassen.map((k) => {
               const mentoren = d.km.filter((x) => x.klas === k)
@@ -94,10 +122,11 @@ function Klassen({ d, laad }) {
                       </select>
                     </div>
                   </td>
+                  <td><button className="link" disabled={bezig} onClick={() => verwijderKlas(k)}>Verwijderen</button></td>
                 </tr>
               )
             })}
-            {!klassen.length && <tr><td colSpan={3} className="zacht">Nog geen klassen.</td></tr>}
+            {!klassen.length && <tr><td colSpan={4} className="zacht">Nog geen klassen.</td></tr>}
           </tbody>
         </table>
       </div>
