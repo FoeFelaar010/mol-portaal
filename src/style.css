@@ -97,6 +97,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .tabel .chips { margin: 0; align-items: center; }
 .tabel .chips select { width: auto; margin: 0; padding: 2px 6px; }
 .zoekrij select { width: auto; margin: 0; }
+.bekijk-als { border: 2px dashed var(--rand); border-radius: 16px; padding: 4px 16px 16px; margin-top: 12px; }
 .beheer-login { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rand); }
 .lijst li form.bewerk { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
 .lijst li form.bewerk input { margin: 0; }

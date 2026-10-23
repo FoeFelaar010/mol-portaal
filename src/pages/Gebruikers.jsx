@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { Laden, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
+import Leerling from './Leerling.jsx'
 
 const hoofdKlas = (k) => String(k || '').trim().toUpperCase()
 const geldigMail = (m) => /^\S+@\S+\.\S+$/.test(m)
@@ -10,6 +11,7 @@ const dbFout = (error) => (error.code === '23505' ? new Error('Dit e-mailadres b
 export default function Gebruikers({ zelf }) {
   const [soort, setSoort] = useState('klassen')
   const [d, setD] = useState(null)
+  const [bekijk, setBekijk] = useState(null) // leerling waarvan de beheerder het scherm bekijkt
 
   const laad = useCallback(async () => {
     const [doc, ll, km] = await Promise.all([
@@ -22,6 +24,17 @@ export default function Gebruikers({ zelf }) {
   useEffect(() => { laad() }, [laad])
 
   if (!d) return <Laden />
+  if (bekijk) {
+    return (
+      <>
+        <div className="melding info kop-rij">
+          <span>Je bekijkt het portaal als <strong>{bekijk.naam}</strong> ({bekijk.klas}). Alleen kijken: kiezen en annuleren werken hier niet.</span>
+          <button className="secundair" onClick={() => setBekijk(null)}>Terug naar beheer</button>
+        </div>
+        <div className="bekijk-als"><Leerling leerling={bekijk} kijk /></div>
+      </>
+    )
+  }
   return (
     <>
       <div className="segment">
@@ -31,7 +44,7 @@ export default function Gebruikers({ zelf }) {
       </div>
       {soort === 'klassen' && <Klassen d={d} laad={laad} />}
       {soort === 'docenten' && <Docenten d={d} laad={laad} zelf={zelf} />}
-      {soort === 'leerlingen' && <Leerlingen d={d} laad={laad} />}
+      {soort === 'leerlingen' && <Leerlingen d={d} laad={laad} bekijk={setBekijk} />}
     </>
   )
 }
@@ -242,7 +255,7 @@ function Docenten({ d, laad, zelf }) {
 // ----------------------------------------------------------- Leerlingen
 const MAX = 100
 
-function Leerlingen({ d, laad }) {
+function Leerlingen({ d, laad, bekijk }) {
   const { bezig, voer, melding } = useActie()
   const [zoek, setZoek] = useState('')
   const [klas, setKlas] = useState('')
@@ -328,6 +341,7 @@ function Leerlingen({ d, laad }) {
               <div className="zacht klein">{l.email}{l.leerlingnummer ? ` · ${l.leerlingnummer}` : ''}</div>
             </div>
             <div className="rij-acties">
+              <button className="link" onClick={() => { bekijk(l); window.scrollTo(0, 0) }}>Bekijken</button>
               <button className="link" onClick={() => setBewerk({ ...l })}>Wijzigen</button>
               <button className="link" disabled={bezig} onClick={() => verwijder(l)}>Verwijderen</button>
             </div>
