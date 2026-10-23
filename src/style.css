@@ -220,8 +220,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--paars); outline:
 }
 .kop { padding-left: max(20px, calc((100% - 860px) / 2 + 16px)); padding-right: max(20px, calc((100% - 860px) / 2 + 16px)); }
 @media (max-width: 600px) { .kop { padding-left: 14px; padding-right: 14px; } }
-.testmodus { margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--rand); }
-.testmodus h3 { margin-top: 0; font-size: 1rem; color: var(--zacht); }
 .testaccounts li { padding: 8px 0; }
 .testaccounts button { min-height: 36px; padding: 6px 14px; }
 

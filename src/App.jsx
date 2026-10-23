@@ -11,7 +11,6 @@ export default function App() {
   const [sessie, setSessie] = useState(undefined)
   const [gebruiker, setGebruiker] = useState(null) // {type:'docent'|'leerling'|'onbekend', ...}
   const [weergave, setWeergave] = useState('mentor')
-  const [versie, setVersie] = useState(0) // na kiezen testaccount opnieuw laden
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessie(data.session))
@@ -22,22 +21,19 @@ export default function App() {
   useEffect(() => {
     if (!sessie) { setGebruiker(null); return }
     ;(async () => {
-      let email = (sessie.user.email || '').toLowerCase()
-      if (!email) { // anonieme sessie: testmodus
-        const { data } = await supabase.rpc('mijn_email')
-        email = (data || '').toLowerCase()
-      }
-      if (!email) { setGebruiker({ type: 'test' }); return }
+      const email = (sessie.user.email || '').toLowerCase()
+      // Oude anonieme sessie (testmodus bestaat niet meer): uitloggen
+      if (!email || sessie.user.is_anonymous) { await supabase.auth.signOut(); return }
       const { data: d } = await supabase.from('docenten').select('*').eq('email', email).maybeSingle()
       // Wachtwoord-accounts zijn alleen voor beheerders; anderen loggen in met Microsoft
-      const alleenWachtwoord = !sessie.user.is_anonymous && (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
+      const alleenWachtwoord = (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
       if (alleenWachtwoord && !d?.is_admin) { setGebruiker({ type: 'onbekend', email, wachtwoord: true }); return }
       if (d) { setGebruiker({ type: 'docent', ...d }); setWeergave(d.is_admin ? 'beheer' : 'mentor'); return }
       const { data: l } = await supabase.from('leerlingen').select('*').eq('email', email).maybeSingle()
       if (l) { setGebruiker({ type: 'leerling', ...l }); return }
       setGebruiker({ type: 'onbekend', email })
     })()
-  }, [sessie, versie])
+  }, [sessie])
 
   const uitloggen = () => supabase.auth.signOut()
 
@@ -50,7 +46,7 @@ export default function App() {
           <img src="./logo.png" alt={SCHOOL.naam} className="logo-img" />
           <span className="app-naam">MOL-gesprekken</span>
         </div>
-        {sessie && gebruiker?.type !== 'test' && (
+        {sessie && (
           <div className="kop-acties">
             {gebruiker?.type === 'docent' && gebruiker.is_admin && (
               <button className="kop-knop" onClick={() => setWeergave(weergave === 'beheer' ? 'mentor' : 'beheer')}>
@@ -62,7 +58,7 @@ export default function App() {
         )}
       </header>
       <main className="pagina">
-        {(!sessie || gebruiker?.type === 'test') && <Login testSessie={gebruiker?.type === 'test'} klaar={() => setVersie((v) => v + 1)} />}
+        {!sessie && <Login />}
         {sessie && !gebruiker && <Laden />}
         {gebruiker?.type === 'onbekend' && (
           <div className="kaart">

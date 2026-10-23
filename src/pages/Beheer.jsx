@@ -420,19 +420,6 @@ function Beheerders({ zelf }) {
     supabase.auth.getUser().then(({ data }) => setMetWachtwoord((data.user?.app_metadata?.providers || []).includes('email')))
   }, [])
 
-  const [testmodus, setTestmodus] = useState(null)
-  useEffect(() => {
-    supabase.from('instellingen').select('testmodus').eq('id', 1).maybeSingle().then(({ data }) => setTestmodus(data?.testmodus ?? null))
-  }, [])
-  async function zetTestmodus(aan) {
-    if (!aan && !await bevestig('Testmodus uitzetten? Daarna kan alleen nog worden ingelogd met een echt account.')) return
-    await voer(async () => {
-      const { error } = await supabase.from('instellingen').update({ testmodus: aan }).eq('id', 1)
-      if (error) throw error
-      setTestmodus(aan)
-    }, aan ? 'Testmodus staat aan.' : 'Testmodus staat uit.')
-  }
-
   async function opschonen() {
     if (!await bevestig('Rondes waarvan de laatste gespreksdag meer dan 30 dagen geleden was, worden met alle afspraken en opmerkingen verwijderd. Doorgaan?')) return
     await voer(async () => {
@@ -488,19 +475,6 @@ function Beheerders({ zelf }) {
       </div>
       {metWachtwoord && <WachtwoordWijzigen />}
       <LokalenBeheer />
-      {testmodus !== null && (
-        <div className="kaart">
-          <div className="kop-rij">
-            <h2>Testmodus</h2>
-            <label className="schakel">
-              <input type="checkbox" checked={testmodus} onChange={(e) => zetTestmodus(e.target.checked)} />
-              <span>{testmodus ? 'Aan' : 'Uit'}</span>
-            </label>
-          </div>
-          <p className="zacht">Met de testmodus aan kan iedereen op het inlogscherm een <strong>testaccount (@mms.nl)</strong> kiezen,
-            zonder wachtwoord. Echte leerlingen en docenten zijn zo niet te gebruiken. Zet dit uit vóór de echte gespreksronde.</p>
-        </div>
-      )}
       <div className="kaart">
         <h2>Privacy: oude gegevens opschonen</h2>
         <p className="zacht">Verwijdert rondes, afspraken en opmerkingen waarvan de laatste gespreksdag meer dan 30 dagen geleden was.
