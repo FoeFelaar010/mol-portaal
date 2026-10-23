@@ -17,7 +17,8 @@ export default function Leerling({ leerling, kijk = false }) {
 
   return (
     <>
-      <h1>Hoi {voornaam}</h1>
+      <h1>Beste {voornaam} en ouder(s)/verzorger(s)</h1>
+      <p>Hier plant u samen het <strong>mentor-ouder-leerlinggesprek</strong> (MOL). Het gesprek is verplicht: kies een moment dat voor u allebei past.</p>
       <p className="zacht">Klas {leerling.klas}</p>
       {!rondes && <Laden />}
       {rondes && !rondes.length && (
@@ -134,7 +135,7 @@ function Ronde({ ronde, kijk }) {
           <h3>{dag(eigen.start)}</h3>
           <p>{tijd(eigen.start)} – {tijd(eigen.eind)} met <strong>{eigen.docent_naam}</strong>
             {eigen.lokaal && <> · lokaal <strong>{eigen.lokaal}</strong></>}</p>
-          {boeking?.door_mentor && <p className="zacht">Je mentor heeft deze afspraak voor je gemaakt.</p>}
+          {boeking?.door_mentor && <p className="zacht">Deze afspraak is in overleg door de mentor ingepland. Past het moment toch niet? Neem dan contact op met de mentor; wijzigen kan alleen via de mentor.</p>}
           <div className="knoppen">
             <button onClick={agenda}>Zet in agenda</button>
             {open && !boeking?.door_mentor && <button className="secundair" onClick={() => setVerplaats(!verplaats)}>{verplaats ? 'Niet verplaatsen' : 'Verplaatsen'}</button>}
