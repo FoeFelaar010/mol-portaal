@@ -286,20 +286,22 @@ function Beschikbaarheid({ ronde, data, laad }) {
 function Inplannen({ data, laad }) {
   const { bezig, voer, melding } = useActie()
   const [zoek, setZoek] = useState('')
-  const [resultaten, setResultaten] = useState([])
+  const [resultaten, setResultaten] = useState(null) // null = niet gezocht
   const [leerling, setLeerling] = useState('')
   const [slot, setSlot] = useState('')
   const geboekt = new Set(data.boekingen.map((b) => b.leerling_id))
-  const keuzes = [...data.leerlingen.filter((l) => !geboekt.has(l.id)), ...resultaten.filter((r) => !data.leerlingen.some((l) => l.id === r.id))]
+  // Na zoeken: alleen de zoekresultaten. Anders: eigen klas, niet-ingeplande leerlingen eerst
+  const keuzes = resultaten ?? [...data.leerlingen].sort((a, b) => geboekt.has(a.id) - geboekt.has(b.id))
   const vrij = data.slots.filter((s) => !s.boekingen)
 
   async function zoeken(e) {
     e.preventDefault()
-    if (zoek.trim().length < 2) return
-    const q = `%${zoek.trim()}%`
-    const { data: r } = await supabase.from('leerlingen').select('*').or(`naam.ilike.${q},klas.ilike.${q},email.ilike.${q}`).limit(20)
+    const t = zoek.trim().replace(/[,()*%]/g, ' ').trim()
+    if (t.length < 2) { setResultaten(null); return }
+    const q = `%${t}%`
+    const { data: r } = await supabase.from('leerlingen').select('*').or(`naam.ilike.${q},klas.ilike.${q},email.ilike.${q}`).order('naam').limit(30)
     setResultaten(r || [])
-    if (r?.length) setLeerling(r[0].id)
+    setLeerling(r?.length ? r[0].id : '')
   }
 
   async function plan(e) {
@@ -319,9 +321,17 @@ function Inplannen({ data, laad }) {
       <p className="zacht">Voor leerlingen die je zeker wilt spreken. De leerling ziet de afspraak en kan die niet zelf annuleren.
         Een bestaande afspraak van de leerling wordt vervangen.</p>
       <div className="zoekrij">
-        <input placeholder="Zoek leerling (ook buiten je klas)" value={zoek} onChange={(e) => setZoek(e.target.value)} />
+        <input placeholder="Zoek leerling op naam, klas of e-mail (ook buiten je klas)" value={zoek}
+          onChange={(e) => { setZoek(e.target.value); if (!e.target.value.trim()) setResultaten(null) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') zoeken(e) }} />
         <button type="button" className="secundair" onClick={zoeken}>Zoeken</button>
       </div>
+      {resultaten && (
+        <p className={resultaten.length ? 'zacht klein' : 'waarschuwing klein'}>
+          {resultaten.length ? `${resultaten.length} leerling${resultaten.length === 1 ? '' : 'en'} gevonden: kies hieronder.` : `Geen leerling gevonden voor “${zoek.trim()}”.`}
+          {' '}<button type="button" className="link" onClick={() => { setZoek(''); setResultaten(null); setLeerling('') }}>Toon mijn klas</button>
+        </p>
+      )}
       <label>Leerling
         <select value={leerling} onChange={(e) => setLeerling(e.target.value)} required>
           <option value="">Kies leerling</option>
