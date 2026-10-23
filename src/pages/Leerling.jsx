@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { dag, dagTijd, perDag, tijd } from '../lib/fmt.js'
 import { download, maakIcs } from '../lib/files.js'
-import { Laden, Melding, useActie } from '../components/ui.jsx'
+import { Laden, Melding, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 
 export default function Leerling({ leerling }) {
   const [rondes, setRondes] = useState(null)
@@ -62,7 +62,7 @@ function Ronde({ ronde }) {
     const tekst = eigen
       ? `Je afspraak verplaatsen naar ${dagTijd(slot.start)}?`
       : `Gesprek inplannen op ${dagTijd(slot.start)} met ${slot.docent_naam}?`
-    if (!window.confirm(tekst)) return
+    if (!await bevestig(tekst, { knop: eigen ? 'Ja, verplaatsen' : 'Ja, inplannen' })) return
     await voer(async () => {
       const { error } = await supabase.rpc('boek', { p_slot: slot.slot_id, p_opmerking: opmerking })
       if (error) throw error
@@ -72,7 +72,7 @@ function Ronde({ ronde }) {
   }
 
   async function annuleer() {
-    if (!window.confirm('Weet je zeker dat je je afspraak wilt annuleren?')) return
+    if (!await bevestig('Weet je zeker dat je je afspraak wilt annuleren?')) return
     await voer(async () => {
       const { error } = await supabase.rpc('annuleer', { p_ronde: ronde.id })
       if (error) throw error

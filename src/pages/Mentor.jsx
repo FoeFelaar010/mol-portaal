@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { dag, dagTijd, datumLabel, hhmm, perDag, tijd } from '../lib/fmt.js'
 import { download, maakCsv, maakIcs } from '../lib/files.js'
-import { KopieerKnop, Laden, LeerlingLijst, Statistiek, Tabs, useActie } from '../components/ui.jsx'
+import { KopieerKnop, Laden, LeerlingLijst, Statistiek, Tabs, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import { SCHOOL } from '../config.js'
 
 export default function Mentor({ docent }) {
@@ -112,7 +112,7 @@ function Overzicht({ ronde, docent, data, laad }) {
     ]), 'text/csv;charset=utf-8')
   }
   async function annuleer(b) {
-    if (!window.confirm(`Afspraak van ${b.leerlingen.naam} annuleren?`)) return
+    if (!await bevestig(`Afspraak van ${b.leerlingen.naam} annuleren?`)) return
     await voer(async () => {
       const { error } = await supabase.rpc('mentor_annuleer', { p_boeking: b.id })
       if (error) throw error
@@ -195,6 +195,10 @@ function Beschikbaarheid({ ronde, data, laad }) {
   const [form, setForm] = useState({ datum: '', van: '', tot: '', duur: SCHOOL.standaardDuur, pauzeNa: 0, pauzeMin: 5, lokaal: data.slots.at(-1)?.lokaal || '' })
   const zet = (k) => (e) => { setBericht(null); setForm({ ...form, [k]: e.target.value }) }
   const dagInfo = data.dagen.find((d) => d.datum === form.datum)
+  const [lokalen, setLokalen] = useState([])
+  useEffect(() => {
+    supabase.from('lokalen').select('naam').order('volgorde').order('naam').then(({ data: d }) => setLokalen((d || []).map((x) => x.naam)))
+  }, [])
 
   function kiesDag(e) {
     const d = data.dagen.find((x) => x.datum === e.target.value)
@@ -216,7 +220,7 @@ function Beschikbaarheid({ ronde, data, laad }) {
   }
 
   async function verwijder(ids) {
-    if (!window.confirm(ids.length > 1 ? `${ids.length} vrije tijdslots verwijderen?` : 'Dit tijdslot verwijderen?')) return
+    if (!await bevestig(ids.length > 1 ? `${ids.length} vrije tijdslots verwijderen?` : 'Dit tijdslot verwijderen?')) return
     await voer(async () => {
       const { error } = await supabase.from('slots').delete().in('id', ids)
       if (error) throw error
@@ -241,7 +245,8 @@ function Beschikbaarheid({ ronde, data, laad }) {
           <label>Van<input type="time" value={form.van} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('van')} required /></label>
           <label>Tot<input type="time" value={form.tot} min={hhmm(dagInfo?.van)} max={hhmm(dagInfo?.tot)} onChange={zet('tot')} required /></label>
           <label>Minuten per gesprek<input type="number" min="5" max="120" value={form.duur} onChange={zet('duur')} required /></label>
-          <label>Lokaal<input value={form.lokaal} onChange={zet('lokaal')} placeholder="bijv. 1.12" maxLength={20} /></label>
+          <label>Lokaal<input list="lokalen-lijst" value={form.lokaal} onChange={zet('lokaal')} placeholder="kies of typ" maxLength={20} />
+            <datalist id="lokalen-lijst">{lokalen.map((l) => <option key={l} value={l} />)}</datalist></label>
           <label>Pauze na elke … gesprekken<input type="number" min="0" value={form.pauzeNa} onChange={zet('pauzeNa')} /></label>
           <label>Pauze (minuten)<input type="number" min="0" value={form.pauzeMin} onChange={zet('pauzeMin')} /></label>
         </div>
@@ -408,7 +413,7 @@ function KlasInstelling({ klas, ronde, data, laad }) {
   }
 
   async function verdeelAlfabet() {
-    if (!window.confirm('Leerlingen op alfabet verdelen over de mentoren? Bestaande verdeling wordt overschreven.')) return
+    if (!await bevestig('Leerlingen op alfabet verdelen over de mentoren? Bestaande verdeling wordt overschreven.')) return
     const gesorteerd = [...leerlingen].sort((a, b) => a.naam.localeCompare(b.naam))
     const per = Math.ceil(gesorteerd.length / mentoren.length)
     const rijen = gesorteerd.map((l, i) => ({ ronde_id: ronde.id, leerling_id: l.id, docent_id: mentoren[Math.floor(i / per)].docent_id }))
@@ -479,7 +484,7 @@ function AgendaKoppeling({ docent, geboekt, downloaden }) {
   const [open, setOpen] = useState(false)
   const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/agenda_feed?token=${token}&apikey=${import.meta.env.VITE_SUPABASE_ANON_KEY}`
   async function nieuw() {
-    if (!window.confirm('Nieuwe link maken? De oude link werkt dan niet meer; je moet de agenda opnieuw toevoegen in Outlook.')) return
+    if (!await bevestig('Nieuwe link maken? De oude link werkt dan niet meer; je moet de agenda opnieuw toevoegen in Outlook.')) return
     const { data, error } = await supabase.rpc('nieuwe_agenda_link')
     if (!error && data) setToken(data)
   }

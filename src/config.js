@@ -5,7 +5,9 @@ export const SCHOOL = {
   logoRegel2: 'MAVO SCHIEBROEK',
   // Hoe het schoolmailadres van een leerling is opgebouwd, als de export geen e-mailkolom heeft.
   // {nr} wordt vervangen door het leerlingnummer.
-  leerlingEmail: 'l{nr}@melanchthon.nl',
+  leerlingEmail: 'l3{nr}@cvo.nl',
+  // Hoe het mailadres van een docent is opgebouwd (mentorexport Zermelo heeft geen e-mailkolom)
+  docentEmail: '{v}.{achternaam}@cvo.nl',
   standaardDuur: 15,
   // Logo: vervang public/logo.png
 }

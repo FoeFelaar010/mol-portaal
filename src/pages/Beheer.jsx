@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { dag, datumLabel, dagTijd, hhmm, naarInput, tijd, vanInput } from '../lib/fmt.js'
 import { download, maakCsv } from '../lib/files.js'
-import { KopieerKnop, Laden, LeerlingLijst, Tabs, Voortgang, useActie } from '../components/ui.jsx'
+import { KopieerKnop, Laden, LeerlingLijst, Tabs, Voortgang, useActie, bevestig, bevestigTyp } from '../components/ui.jsx'
 import Import from './Import.jsx'
 
 export default function Beheer({ docent }) {
@@ -126,7 +126,7 @@ function Ronde({ ronde, laad }) {
   }, ok)
 
   async function verwijderRonde() {
-    const antwoord = window.prompt(`Typ VERWIJDER om "${ronde.naam}" met alle tijden en afspraken te verwijderen.`)
+    const antwoord = await bevestigTyp(`Typ VERWIJDER om "${ronde.naam}" met alle tijden en afspraken te verwijderen.`)
     if (antwoord?.trim().toUpperCase() !== 'VERWIJDER') return
     await voer(async () => {
       const { error } = await supabase.from('rondes').delete().eq('id', ronde.id)
@@ -146,7 +146,7 @@ function Ronde({ ronde, laad }) {
   }
 
   async function verwijderDag(d) {
-    if (!window.confirm(`${datumLabel(d.datum)} verwijderen? Tijden die mentoren op deze dag al hebben ingevuld blijven staan.`)) return
+    if (!await bevestig(`${datumLabel(d.datum)} verwijderen? Tijden die mentoren op deze dag al hebben ingevuld blijven staan.`)) return
     await voer(async () => {
       const { error } = await supabase.from('ronde_dagen').delete().eq('id', d.id)
       if (error) throw error
@@ -355,7 +355,7 @@ function Beheerders({ zelf }) {
   }
 
   async function verwijder(d) {
-    if (!window.confirm(`${d.naam} is dan geen beheerder meer. Doorgaan?`)) return
+    if (!await bevestig(`${d.naam} is dan geen beheerder meer. Doorgaan?`)) return
     await voer(async () => {
       const { error } = await supabase.from('docenten').update({ is_admin: false }).eq('id', d.id)
       if (error) throw error
@@ -368,7 +368,7 @@ function Beheerders({ zelf }) {
     supabase.from('instellingen').select('testmodus').eq('id', 1).maybeSingle().then(({ data }) => setTestmodus(data?.testmodus ?? null))
   }, [])
   async function zetTestmodus(aan) {
-    if (!aan && !window.confirm('Testmodus uitzetten? Daarna kan alleen nog worden ingelogd met een echt account.')) return
+    if (!aan && !await bevestig('Testmodus uitzetten? Daarna kan alleen nog worden ingelogd met een echt account.')) return
     await voer(async () => {
       const { error } = await supabase.from('instellingen').update({ testmodus: aan }).eq('id', 1)
       if (error) throw error
@@ -377,7 +377,7 @@ function Beheerders({ zelf }) {
   }
 
   async function opschonen() {
-    if (!window.confirm('Rondes waarvan de laatste gespreksdag meer dan 30 dagen geleden was, worden met alle afspraken en opmerkingen verwijderd. Doorgaan?')) return
+    if (!await bevestig('Rondes waarvan de laatste gespreksdag meer dan 30 dagen geleden was, worden met alle afspraken en opmerkingen verwijderd. Doorgaan?')) return
     await voer(async () => {
       const { data, error } = await supabase.rpc('verwijder_oude_data')
       if (error) throw error
@@ -405,6 +405,7 @@ function Beheerders({ zelf }) {
           <button type="submit" disabled={bezig}>Beheerder toevoegen</button>
         </form>
       </div>
+      <LokalenBeheer />
       {testmodus !== null && (
         <div className="kaart">
           <div className="kop-rij">
@@ -426,5 +427,56 @@ function Beheerders({ zelf }) {
       </div>
       {melding}
     </>
+  )
+}
+
+// ------------------------------------------------------------- Lokalen
+function LokalenBeheer() {
+  const [lijst, setLijst] = useState([])
+  const [nieuw, setNieuw] = useState('')
+  const { bezig, voer, melding } = useActie()
+  const laad = useCallback(async () => {
+    const { data } = await supabase.from('lokalen').select('naam, volgorde').order('volgorde').order('naam')
+    setLijst(data || [])
+  }, [])
+  useEffect(() => { laad() }, [laad])
+  async function voegToe(e) {
+    e.preventDefault()
+    const namen = nieuw.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)
+    if (!namen.length) return
+    const start = lijst.reduce((m, l) => Math.max(m, l.volgorde), 0)
+    await voer(async () => {
+      const { error } = await supabase.from('lokalen').upsert(namen.map((naam, i) => ({ naam, volgorde: start + i + 1 })), { onConflict: 'naam', ignoreDuplicates: true })
+      if (error) throw error
+      setNieuw('')
+      await laad()
+    })
+  }
+  async function verwijder(naam) {
+    if (!await bevestig(`Lokaal ${naam} uit de lijst halen? Bestaande afspraken in dit lokaal blijven staan.`, { knop: 'Uit lijst halen' })) return
+    await voer(async () => {
+      const { error } = await supabase.from('lokalen').delete().eq('naam', naam)
+      if (error) throw error
+      await laad()
+    })
+  }
+  return (
+    <div className="kaart">
+      <h2>Lokalen</h2>
+      <p className="zacht klein">Mentoren kiezen uit deze lijst bij het invullen van hun tijden (of typen zelf een lokaal).</p>
+      <div className="chips">
+        {lijst.map((l) => (
+          <span key={l.naam} className="chip">{l.naam}
+            <button className="link" aria-label={`${l.naam} verwijderen`} onClick={() => verwijder(l.naam)}>✕</button>
+          </span>
+        ))}
+        {!lijst.length && <span className="zacht">Nog geen lokalen.</span>}
+      </div>
+      <form className="zoekrij" onSubmit={voegToe}>
+        <input placeholder="Nieuw lokaal, of meerdere met komma's: m301, m302" value={nieuw} onChange={(e) => setNieuw(e.target.value)} />
+        <button type="submit" disabled={bezig}>Toevoegen</button>
+      </form>
+      {melding}
+    </div>
   )
 }

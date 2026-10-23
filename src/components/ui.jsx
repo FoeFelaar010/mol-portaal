@@ -123,3 +123,33 @@ export function LeerlingLijst({ leerlingen, boekingPer, kanNietPer = {}, extra }
     </div>
   )
 }
+
+// --- Eigen bevestigingsvenster (werkt ook waar browser-pop-ups geblokkeerd zijn) ---
+let toonVraag = null
+export function bevestig(tekst, opties = {}) {
+  return new Promise((klaar) => (toonVraag ? toonVraag({ tekst, ...opties, klaar }) : klaar(false)))
+}
+// Vraagt om een woord te typen; geeft dat woord terug of null
+export async function bevestigTyp(tekst, woord = 'VERWIJDER') {
+  return (await bevestig(tekst, { typ: woord, gevaar: true, knop: 'Verwijderen' })) ? woord : null
+}
+export function BevestigHost() {
+  const [v, setV] = useState(null)
+  const [invoer, setInvoer] = useState('')
+  toonVraag = (x) => { setInvoer(''); setV(x) }
+  if (!v) return null
+  const sluit = (ok) => { v.klaar(ok); setV(null) }
+  const magOk = !v.typ || invoer.trim().toUpperCase() === v.typ
+  return (
+    <div className="vraag-achter" onClick={() => sluit(false)}>
+      <div className="vraag" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <p>{v.tekst}</p>
+        {v.typ && <input autoFocus value={invoer} onChange={(e) => setInvoer(e.target.value)} placeholder={v.typ} />}
+        <div className="knoppen">
+          <button className={v.gevaar ? 'gevaar-vol' : ''} disabled={!magOk} onClick={() => sluit(true)} autoFocus={!v.typ}>{v.knop || 'Ja, doorgaan'}</button>
+          <button className="secundair" onClick={() => sluit(false)}>Annuleren</button>
+        </div>
+      </div>
+    </div>
+  )
+}

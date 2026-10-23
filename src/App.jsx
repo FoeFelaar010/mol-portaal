@@ -4,7 +4,7 @@ import Login from './pages/Login.jsx'
 import Leerling from './pages/Leerling.jsx'
 import Mentor from './pages/Mentor.jsx'
 import Beheer from './pages/Beheer.jsx'
-import { Laden } from './components/ui.jsx'
+import { BevestigHost, Laden } from './components/ui.jsx'
 import { SCHOOL } from './config.js'
 
 export default function App() {
@@ -73,6 +73,7 @@ export default function App() {
         {gebruiker?.type === 'docent' && weergave === 'mentor' && <Mentor docent={gebruiker} />}
         {gebruiker?.type === 'docent' && weergave === 'beheer' && <Beheer docent={gebruiker} />}
       </main>
+      <BevestigHost />
       <footer className="voet">
         MOL-portaal · {SCHOOL.naam} · Je gegevens worden alleen gebruikt om gesprekken te plannen
         en na afloop van de gespreksronde verwijderd.
