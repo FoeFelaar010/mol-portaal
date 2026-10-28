@@ -61,6 +61,11 @@ function Ronde({ ronde, kijk }) {
   }, [ronde.id, kijk])
 
   useEffect(() => { laad() }, [laad])
+  // Vrije tijden automatisch verversen (veel ouders tegelijk); niet tijdens een bevestigingsvraag-actie
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible') laad() }, 15000)
+    return () => clearInterval(t)
+  }, [laad])
 
   const nu = new Date()
   const open = ronde.open
@@ -76,7 +81,10 @@ function Ronde({ ronde, kijk }) {
     if (!await bevestig(tekst, { knop: eigen ? 'Ja, verplaatsen' : 'Ja, inplannen' })) return
     await voer(async () => {
       const { error } = await supabase.rpc('boek', { p_slot: slot.slot_id, p_opmerking: opmerking })
-      if (error) throw error
+      if (error) {
+        await laad()
+        throw new Error(error.message + ' De lijst met tijden is bijgewerkt.')
+      }
       await laad()
       setVerplaats(false)
     }, 'Het gesprek is ingepland. U kunt het in uw agenda zetten.')

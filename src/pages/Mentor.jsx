@@ -68,7 +68,15 @@ function useMentorData(ronde, docent) {
         kanNiet = k.data || []
       }
     }
-    setData({ mijnKlassen, collegas, slots: slots.data || [], dagen: dagen.data || [], leerlingen, boekingen, kanNiet })
+    // Duo-mentoren: ook de slots van collega-mentoren van mijn klassen (voor 'Hele klas')
+    const andereIds = [...new Set(collegas.map((c) => c.docent_id).filter((id) => id !== docent.id))]
+    let klasSlots = []
+    if (andereIds.length) {
+      const ks = await supabase.from('slots').select('*, docenten(naam), boekingen(id, opmerking, door_mentor, leerling_id, leerlingen(naam, klas, email))')
+        .eq('ronde_id', ronde.id).in('docent_id', andereIds).order('start')
+      klasSlots = ks.data || []
+    }
+    setData({ mijnKlassen, collegas, klasSlots, slots: slots.data || [], dagen: dagen.data || [], leerlingen, boekingen, kanNiet })
   }, [ronde.id, docent.id])
   useEffect(() => { laad() }, [laad])
   return [data, laad]
@@ -86,12 +94,10 @@ function MentorRonde({ tab, ronde, docent }) {
 // ---------------------------------------------------------------- Overzicht
 function Overzicht({ ronde, docent, data, laad }) {
   const { bezig, voer, melding } = useActie()
-  const [filterDag, setFilterDag] = useState('')
   const geboekt = data.slots.filter((s) => s.boekingen)
   const boekingPer = useMemo(() => Object.fromEntries(data.boekingen.map((b) => [b.leerling_id, {
     tekst: `${dag(b.slots.start)} ${tijd(b.slots.start)} · ${b.slots.docenten?.naam || ''}`, opmerking: b.opmerking,
   }])), [data.boekingen])
-  const dagen = perDag(data.slots).filter(([k]) => !filterDag || k === filterDag)
   const nietIngepland = data.leerlingen.filter((l) => !boekingPer[l.id])
   const kanNietPer = Object.fromEntries(data.kanNiet.map((k) => [k.leerling_id, k]))
   const kanNietLijst = nietIngepland.filter((l) => kanNietPer[l.id])
@@ -144,34 +150,7 @@ function Overzicht({ ronde, docent, data, laad }) {
             <button className="secundair" onClick={() => window.print()}>Printen</button>
           </div>
         </div>
-        <select value={filterDag} onChange={(e) => setFilterDag(e.target.value)}>
-          <option value="">Alle dagen</option>
-          {perDag(data.slots).map(([k, l]) => <option key={k} value={k}>{dag(l[0].start)}</option>)}
-        </select>
-        {!data.slots.length && <p className="zacht">Je hebt nog geen beschikbaarheid ingevuld.</p>}
-        {dagen.map(([k, lijst]) => (
-          <div key={k} className="dag">
-            <h4>{dag(lijst[0].start)}</h4>
-            <ul className="agenda">
-              {lijst.map((s) => (
-                <li key={s.id} className={s.boekingen ? 'bezet' : ''}>
-                  <span className="tijd">{tijd(s.start)}</span>
-                  <div className="groei">
-                    {s.boekingen ? (
-                      <>
-                        <strong>{s.boekingen.leerlingen.naam}</strong> <span className="zacht">{s.boekingen.leerlingen.klas}</span>
-                        {s.boekingen.door_mentor && <span className="label">door jou ingepland</span>}
-                        {s.boekingen.opmerking && <div className="opmerking">“{s.boekingen.opmerking}”</div>}
-                      </>
-                    ) : <span className="zacht">Vrij</span>}
-                    {s.lokaal && <span className="zacht klein"> · lokaal {s.lokaal}</span>}
-                  </div>
-                  {s.boekingen && <button className="link" disabled={bezig} onClick={() => annuleer(s.boekingen)}>Annuleren</button>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        <AgendaRaster data={data} docent={docent} bezig={bezig} annuleer={annuleer} />
       </div>
       <AgendaKoppeling docent={docent} geboekt={geboekt.length} downloaden={agenda} />
       {!!data.leerlingen.length && (
@@ -185,6 +164,85 @@ function Overzicht({ ronde, docent, data, laad }) {
           <LeerlingLijst leerlingen={data.leerlingen} boekingPer={boekingPer} kanNietPer={kanNietPer} />
         </div>
       )}
+    </>
+  )
+}
+
+// Compacte agenda: blokjes per dag, inklapbaar, duo-weergave 'Hele klas'
+const MENTOR_KLEUREN = ['#5b2a86', '#0f766e', '#b45309', '#1d4ed8']
+function AgendaRaster({ data, docent, bezig, annuleer }) {
+  const [alles, setAlles] = useState(false)
+  const [heleKlas, setHeleKlas] = useState(false)
+  const [dicht, setDicht] = useState({})
+  const [open, setOpen] = useState(null)
+  const duo = data.klasSlots.length > 0 || new Set(data.collegas.map((c) => c.docent_id)).size > 1
+  const eigen = data.slots.map((s) => ({ ...s, mentor: docent.naam }))
+  const anderen = data.klasSlots.map((s) => ({ ...s, mentor: s.docenten?.naam || '' }))
+  const bron = heleKlas ? [...eigen, ...anderen].sort((a, b) => a.start.localeCompare(b.start)) : eigen
+  const mentoren = [...new Set([docent.naam, ...anderen.map((s) => s.mentor)])]
+  const kleur = (m) => MENTOR_KLEUREN[mentoren.indexOf(m) % MENTOR_KLEUREN.length]
+  const tellers = mentoren.map((m) => [m, data.boekingen.filter((b) => (b.slots?.docenten?.naam || '') === m).length])
+  const zonder = data.leerlingen.length - data.boekingen.length
+  return (
+    <>
+      <div className="knoppen raster-opties">
+        <button className={alles ? 'secundair' : ''} onClick={() => setAlles(false)}>Alleen afspraken</button>
+        <button className={alles ? '' : 'secundair'} onClick={() => setAlles(true)}>Alles</button>
+        {duo && <>
+          <span className="scheiding" />
+          <button className={heleKlas ? 'secundair' : ''} onClick={() => setHeleKlas(false)}>Mijn afspraken</button>
+          <button className={heleKlas ? '' : 'secundair'} onClick={() => setHeleKlas(true)}>Hele klas</button>
+        </>}
+      </div>
+      {duo && heleKlas && (
+        <p className="tellers">
+          {tellers.map(([m, n]) => <span key={m}><i style={{ background: kleur(m) }} /> {m} {n}</span>)}
+          <span>· niet ingepland {zonder}</span>
+        </p>
+      )}
+      {!bron.length && <p className="zacht">Je hebt nog geen beschikbaarheid ingevuld.</p>}
+      <div className="raster-dagen">
+        {perDag(bron).map(([k, lijst]) => {
+          const bezet = lijst.filter((s) => s.boekingen).length
+          const toon = alles ? lijst : lijst.filter((s) => s.boekingen)
+          return (
+            <div key={k} className="dag-blok">
+              <button className="dag-kop" onClick={() => setDicht({ ...dicht, [k]: !dicht[k] })}>
+                <span>{dicht[k] ? '▸' : '▾'} {dag(lijst[0].start)}</span>
+                <span className="zacht klein">{bezet} van {lijst.length} bezet</span>
+              </button>
+              {!dicht[k] && (
+                <div className="blokjes">
+                  {!toon.length && <span className="zacht klein">Nog geen afspraken</span>}
+                  {toon.map((s) => {
+                    const b = s.boekingen
+                    return (
+                      <button key={s.id} className={'blokje' + (b ? ' bezet' : '')}
+                        style={b && heleKlas ? { background: kleur(s.mentor), borderColor: kleur(s.mentor) } : undefined}
+                        onClick={() => b && setOpen(open === s.id ? null : s.id)} title={s.lokaal ? `Lokaal ${s.lokaal}` : ''}>
+                        <span className="tijd">{tijd(s.start)}</span>
+                        {b ? <span className="naam">{b.leerlingen.naam} <small>{b.leerlingen.klas}</small>{b.opmerking ? ' 💬' : ''}</span>
+                          : <span className="naam zacht">vrij</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {toon.filter((s) => s.id === open).map((s) => (
+                <div key={s.id} className="blok-details">
+                  <strong>{s.boekingen.leerlingen.naam}</strong> ({s.boekingen.leerlingen.klas}) · {tijd(s.start)}–{tijd(s.eind)}
+                  {s.lokaal && <> · lokaal {s.lokaal}</>}{heleKlas && <> · {s.mentor}</>}
+                  {s.boekingen.door_mentor && <span className="label">door mentor ingepland</span>}
+                  {s.boekingen.opmerking && <div className="opmerking">“{s.boekingen.opmerking}”</div>}
+                  {s.docent_id === docent.id && (
+                    <button className="link" disabled={bezig} onClick={() => annuleer(s.boekingen)}>Annuleren</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
     </>
   )
 }

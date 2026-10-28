@@ -248,3 +248,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--paars); outline:
 .vraag { background: #fff; border-radius: 16px; padding: 20px; max-width: 420px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
 .vraag p { margin: 0 0 12px; font-size: 1.05rem; }
 button.gevaar-vol { background: var(--fout); border-color: var(--fout); }
+
+/* Compacte gespreksagenda */
+.raster-opties { margin: 8px 0 12px; flex-wrap: wrap; }
+.raster-opties .scheiding { width: 1px; background: var(--rand); margin: 0 6px; }
+.tellers { display: flex; gap: 14px; flex-wrap: wrap; font-size: .9em; }
+.tellers i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; }
+.raster-dagen { display: grid; gap: 12px; }
+@media (min-width: 900px) { .raster-dagen { grid-template-columns: 1fr 1fr; } }
+.dag-blok { border: 1px solid var(--rand); border-radius: 10px; padding: 8px 10px; }
+.dag-kop { all: unset; cursor: pointer; display: flex; justify-content: space-between; width: 100%; font-weight: 700; }
+.blokjes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.blokje { all: unset; cursor: default; display: flex; gap: 6px; align-items: baseline; font-size: .85em; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--rand); background: #f6f4f9; }
+.blokje.bezet { cursor: pointer; background: var(--paars, #5b2a86); color: #fff; border-color: var(--paars, #5b2a86); }
+.blokje .tijd { font-weight: 700; font-variant-numeric: tabular-nums; }
+.blokje small { opacity: .8; }
+.blok-details { margin-top: 8px; padding: 8px; background: var(--paars-licht, #efe8f6); border-radius: 8px; font-size: .9em; }
+.blok-details .link { margin-left: 8px; }
