@@ -15,15 +15,17 @@ export default function Gebruikers({ zelf }) {
   const [bekijk, setBekijk] = useState(null) // leerling waarvan de beheerder het scherm bekijkt
 
   const laad = useCallback(async () => {
-    const [doc, ll, km, cs] = await Promise.all([
+    const [doc, ll, km, cs, dcs] = await Promise.all([
       supabase.from('docenten').select('*').order('naam'),
       supabase.from('leerlingen').select('*').order('naam'),
       supabase.from('klas_mentoren').select('klas, docent_id'),
       supabase.rpc('beheer_code_status'),
+      supabase.rpc('beheer_docentcode_status'),
     ])
     setD({
       docenten: doc.data || [], leerlingen: ll.data || [], km: km.data || [],
       codes: Object.fromEntries((cs.data || []).map((x) => [x.leerling_id, x.aangemaakt])),
+      docentCodes: Object.fromEntries((dcs.data || []).map((x) => [x.docent_id, x.aangemaakt])),
     })
   }, [])
   useEffect(() => { laad() }, [laad])
@@ -214,11 +216,89 @@ function Docenten({ d, laad, zelf }) {
     }, `${x.naam} is verwijderd.`)
   }
 
+  // --- Inlogcodes en SSO voor docenten (zie supabase/docentcodes.sql). Beheerders krijgen geen code. ---
+  const [nieuweCodes, setNieuweCodes] = useState(null)
+  const zonderSso = lijst.filter((x) => !x.sso && !x.is_admin)
+  const metSso = lijst.filter((x) => x.sso && !x.is_admin)
+  const metCode = zonderSso.filter((x) => d.docentCodes[x.id])
+  const groep = zoek ? `deze ${lijst.length} docenten` : `alle ${lijst.length} docenten`
+
+  async function maakCodes(wie = zonderSso) {
+    if (!wie.length) return
+    const oud = wie.filter((x) => d.docentCodes[x.id]).length
+    if ((wie.length > 1 || oud) && !await bevestig(`${oud ? 'Nieuwe inlogcode' : 'Inlogcode'}${wie.length > 1 ? 's' : ''} maken voor ${wie.length === 1 ? wie[0].naam : `${wie.length} docenten zonder SSO`}?`
+      + (oud ? ` ${oud === 1 && wie.length === 1 ? 'De oude code' : `${oud} oude code${oud === 1 ? '' : 's'}`} werkt daarna niet meer.` : ''), { knop: 'Codes maken' })) return
+    await voer(async () => {
+      const { data, error } = await supabase.rpc('maak_docentcodes', { p_docenten: wie.map((x) => x.id) })
+      if (error) throw error
+      setNieuweCodes(data || [])
+      await laad()
+    }, 'Inlogcodes gemaakt.')
+  }
+
+  async function toonCodes(wie) {
+    await voer(async () => {
+      const { data, error } = await supabase.rpc('beheer_docentcodes', { p_docenten: wie.map((x) => x.id) })
+      if (error) throw error
+      setNieuweCodes(data || [])
+    })
+  }
+
+  async function zetSso(ids, aan) {
+    if (!ids.length) return
+    if (ids.length > 1 && !await bevestig(aan
+      ? `SSO aanzetten voor ${ids.length} docenten? Hun inlogcodes werken dan direct niet meer; ze loggen in met Microsoft.`
+      : `SSO uitzetten voor ${ids.length} docenten? Ze hebben dan een nieuwe inlogcode nodig.`, { knop: aan ? 'SSO aanzetten' : 'SSO uitzetten' })) return
+    await voer(async () => {
+      const { error } = await supabase.rpc('zet_sso_docent', { p_docenten: ids, p_aan: aan })
+      if (error) throw error
+      await laad()
+    }, `SSO ${aan ? 'aan' : 'uit'} voor ${ids.length} docent${ids.length === 1 ? '' : 'en'}.`)
+  }
+
+  function printCodes() {
+    document.body.classList.add('print-codes')
+    window.print()
+    setTimeout(() => document.body.classList.remove('print-codes'), 500)
+  }
+
   return (
     <div className="kaart">
       <h2>Docenten</h2>
       <input placeholder="Zoek naam, e-mail of klas" value={zoek} onChange={(e) => setZoek(e.target.value)} />
       {melding}
+      {nieuweCodes && (
+        <div className="kaart info codelijst">
+          <div className="kop-rij">
+            <h3>Inlogcodes docenten ({nieuweCodes.length})</h3>
+            <div className="knoppen">
+              <button className="secundair" onClick={printCodes}>Printen</button>
+              <button className="secundair" onClick={() => download('mol-inlogcodes-docenten.csv', maakCsv([['Docent', 'Inlogcode'],
+                ...nieuweCodes.map((c) => [c.naam, c.code])]), 'text/csv;charset=utf-8')}>Excel (.csv)</button>
+              <button className="link" onClick={() => setNieuweCodes(null)}>Sluiten</button>
+            </div>
+          </div>
+          <p className="zacht klein">Geef elke docent persoonlijk zijn of haar code. Inloggen: MOL-portaal → “Andere manier van inloggen” → Inlogcode.
+            De code werkt tot SSO bij de docent aan staat. Beheerders krijgen geen code.</p>
+          <div className="scroll">
+            <table className="tabel">
+              <thead><tr><th>Docent</th><th>Inlogcode</th></tr></thead>
+              <tbody>{nieuweCodes.map((c) => <tr key={c.docent_id}><td>{c.naam}</td>
+                <td>{c.code ? <code className="code">{c.code}</code> : <span className="zacht klein">niet meer te tonen: maak een nieuwe</span>}</td></tr>)}</tbody>
+            </table>
+          </div>
+          {!nieuweCodes.length && <p className="zacht">Geen codes gevonden.</p>}
+        </div>
+      )}
+      {!!lijst.length && (
+        <div className="knoppen codeknoppen">
+          <span className="zacht klein">Voor {groep} · {metSso.length} met SSO, {metCode.length} met code:</span>
+          <button className="secundair" disabled={bezig || !metCode.length} onClick={() => toonCodes(metCode)}>Codes tonen/printen ({metCode.length})</button>
+          <button className="secundair" disabled={bezig || !zonderSso.length} onClick={() => maakCodes()}>Nieuwe codes maken ({zonderSso.length})</button>
+          <button className="secundair" disabled={bezig || !zonderSso.length} onClick={() => zetSso(zonderSso.map((x) => x.id), true)}>SSO aan ({zonderSso.length})</button>
+          <button className="secundair" disabled={bezig || !metSso.length} onClick={() => zetSso(metSso.map((x) => x.id), false)}>SSO uit ({metSso.length})</button>
+        </div>
+      )}
       <ul className="lijst">
         {lijst.map((x) => bewerk?.id === x.id ? (
           <li key={x.id}>
@@ -239,6 +319,14 @@ function Docenten({ d, laad, zelf }) {
               <div className="zacht klein">{x.email}{klassenVan(x.id).length ? ` · mentor ${klassenVan(x.id).join(', ')}` : ''}</div>
             </div>
             <div className="rij-acties">
+              {!x.is_admin && !x.sso && (d.docentCodes[x.id]
+                ? <button className="link" disabled={bezig} title={`Code gemaakt ${new Date(d.docentCodes[x.id]).toLocaleDateString('nl-NL')}`} onClick={() => toonCodes([x])}>Code tonen</button>
+                : <button className="link" disabled={bezig} onClick={() => maakCodes([x])}>Code maken</button>)}
+              {!x.is_admin && (
+                <label className="sso-vink" title="Aan = alleen inloggen met Microsoft; de inlogcode werkt niet meer">
+                  <input type="checkbox" checked={!!x.sso} disabled={bezig} onChange={(e) => zetSso([x.id], e.target.checked)} /> SSO
+                </label>
+              )}
               <button className="link" onClick={() => setBewerk({ id: x.id, naam: x.naam, email: x.email, weergavenaam: x.weergavenaam || '' })}>Wijzigen</button>
               {x.id !== zelf.id && <button className="link" disabled={bezig} onClick={() => verwijder(x)}>Verwijderen</button>}
             </div>

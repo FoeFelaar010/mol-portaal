@@ -29,7 +29,7 @@ export default function Login({ klaar }) {
       {anders && (
         <div className="anders">
           <div className="segment">
-            <button className={keuze === 'code' ? 'actief' : ''} onClick={() => setKeuze('code')}>Inlogcode (leerling)</button>
+            <button className={keuze === 'code' ? 'actief' : ''} onClick={() => setKeuze('code')}>Inlogcode</button>
             <button className={keuze === 'beheer' ? 'actief' : ''} onClick={() => setKeuze('beheer')}>Beheerder</button>
           </div>
           {keuze === 'code' ? <CodeLogin klaar={klaar} /> : <BeheerLogin />}
@@ -59,7 +59,7 @@ function CodeLogin({ klaar }) {
       if (error) throw error
       if (data === 'ok') { klaar?.(); return }
       setFout(data === 'teveel' ? 'Te veel pogingen. Probeer het over een kwartier opnieuw.'
-        : 'Deze code klopt niet of werkt niet meer. Log dan in met je schoolaccount, of vraag je mentor om een nieuwe code.')
+        : 'Deze code klopt niet of werkt niet meer. Log dan in met je schoolaccount, of vraag om een nieuwe code.')
     } catch (err) {
       setFout('Inloggen met code lukt nu niet: ' + (err.message || err))
     } finally {
@@ -69,7 +69,7 @@ function CodeLogin({ klaar }) {
 
   return (
     <form onSubmit={inloggen}>
-      <p className="zacht klein">Voor leerlingen die nog niet met hun schoolaccount kunnen inloggen. De code krijg je van je mentor.</p>
+      <p className="zacht klein">Voor leerlingen en docenten die nog niet met hun schoolaccount kunnen inloggen. Leerlingen krijgen de code van hun mentor, docenten van de beheerder.</p>
       <label>Inlogcode<input autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Bijv. K7QM-3XRT"
         autoComplete="off" autoCapitalize="characters" spellCheck={false} required minLength={8} maxLength={12} /></label>
       <Melding type="fout">{fout}</Melding>
