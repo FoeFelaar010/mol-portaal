@@ -1,94 +1,62 @@
-import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase.js'
-import Login from './pages/Login.jsx'
-import Leerling from './pages/Leerling.jsx'
-import Mentor from './pages/Mentor.jsx'
-import Beheer from './pages/Beheer.jsx'
-import { BevestigHost, Laden } from './components/ui.jsx'
-import { SCHOOL } from './config.js'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { vindItem } from './catalogus.js'
+import Top from './components/Top.jsx'
+import Home from './pages/Home.jsx'
+import Handleiding from './pages/Handleiding.jsx'
+import Codeslot, { isOntgrendeld } from './components/Codeslot.jsx'
+// Beheer (met Supabase) apart laden, zodat leerlingen die code niet hoeven te downloaden
+const Beheer = lazy(() => import('./pages/Beheer.jsx'))
+
+// Adressen zoals op de oude site: #/teams of #/teams/3-je-klas-openen
+function leesHash() {
+  const [slug = '', anker = ''] = location.hash.replace(/^#\/?/, '').split('/')
+  return { slug, anker }
+}
 
 export default function App() {
-  const [sessie, setSessie] = useState(undefined)
-  const [gebruiker, setGebruiker] = useState(null) // {type:'docent'|'leerling'|'onbekend', ...}
-  const [weergave, setWeergave] = useState('mentor')
-  const [versie, setVersie] = useState(0) // na inloggen met code opnieuw bepalen wie er is
+  const [route, setRoute] = useState(leesHash)
+  const [navOpen, setNavOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [groot, setGroot] = useState(null) // afbeelding in de lightbox
+  const [, setOpen] = useState(0) // na het invullen van een code opnieuw tekenen
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSessie(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessie(s))
-    return () => data.subscription.unsubscribe()
+    const f = () => { setRoute(leesHash()); setMenuOpen(false); setNavOpen(false) }
+    addEventListener('hashchange', f)
+    return () => removeEventListener('hashchange', f)
   }, [])
 
+  // eén klik-afhandeling voor zoomen en het sluiten van menu's
   useEffect(() => {
-    if (!sessie) { setGebruiker(null); return }
-    ;(async () => {
-      let email = (sessie.user.email || '').toLowerCase()
-      if (sessie.user.is_anonymous) {
-        // Inloggen met inlogcode: de database koppelt deze sessie aan een leerling (zolang SSO niet aan staat)
-        const { data } = await supabase.rpc('my_email')
-        email = (data || '').toLowerCase()
-        if (!email) { setGebruiker({ type: 'anoniem' }); return }
-      }
-      const { data: d } = await supabase.from('docenten').select('*').eq('email', email).maybeSingle()
-      // Wachtwoord-accounts zijn alleen voor beheerders; anderen loggen in met Microsoft
-      const alleenWachtwoord = !sessie.user.is_anonymous && (sessie.user.app_metadata?.providers || []).every((p) => p === 'email')
-      if (alleenWachtwoord && !d?.is_admin) { setGebruiker({ type: 'onbekend', email, wachtwoord: true }); return }
-      if (d) { setGebruiker({ type: 'docent', ...d }); setWeergave(d.is_admin ? 'beheer' : 'mentor'); return }
-      const { data: l } = await supabase.from('leerlingen').select('*').eq('email', email).maybeSingle()
-      if (l) { setGebruiker({ type: 'leerling', ...l }); return }
-      setGebruiker({ type: 'onbekend', email })
-    })()
-  }, [sessie, versie])
+    const klik = (e) => {
+      const z = e.target.closest('.zoom')
+      if (z) { const im = z.querySelector('img'); if (im) setGroot({ src: im.src, knop: z }); return }
+      if (!e.target.closest('.sitemenu, .top-menu')) setMenuOpen(false)
+      if (!e.target.closest('#nav, .menu')) setNavOpen(false)
+    }
+    const toets = (e) => { if (e.key === 'Escape') { setGroot(null); setMenuOpen(false); setNavOpen(false) } }
+    document.addEventListener('click', klik)
+    document.addEventListener('keydown', toets)
+    return () => { document.removeEventListener('click', klik); document.removeEventListener('keydown', toets) }
+  }, [])
 
-  const uitloggen = () => supabase.auth.signOut()
+  const sluitGroot = () => { groot?.knop?.focus(); setGroot(null) }
 
-  if (sessie === undefined) return <main className="pagina"><Laden /></main>
+  const item = vindItem(route.slug)
+  const isBeheer = route.slug === 'beheer'
+  useEffect(() => { if (!item && !isBeheer) { document.title = 'Handleidingen · Melanchthon Mavo Schiebroek'; window.scrollTo(0, 0) } }, [item])
 
   return (
     <>
-      <header className="kop">
-        <div className="merk">
-          <img src="./logo.png" alt={SCHOOL.naam} className="logo-img" />
-          <span className="app-naam">MOL-gesprekken</span>
-        </div>
-        {sessie && gebruiker?.type !== 'anoniem' && (
-          <div className="kop-acties">
-            {gebruiker?.type === 'docent' && gebruiker.is_admin && (
-              <button className="kop-knop" onClick={() => setWeergave(weergave === 'beheer' ? 'mentor' : 'beheer')}>
-                {weergave === 'beheer' ? 'Mentor' : 'Beheer'}
-              </button>
-            )}
-            <button className="kop-knop" onClick={uitloggen} aria-label="Uitloggen">Uitloggen</button>
-          </div>
-        )}
-      </header>
-      <main className="pagina">
-        {/* Anonieme sessie zonder (geldige) code: inlogscherm blijft staan, ook tijdens het controleren */}
-        {(!sessie || gebruiker?.type === 'anoniem' || (sessie.user.is_anonymous && !gebruiker)) && <Login klaar={() => setVersie((v) => v + 1)} />}
-        {sessie && !sessie.user.is_anonymous && !gebruiker && <Laden />}
-        {gebruiker?.type === 'onbekend' && (
-          <div className="kaart">
-            <h1>Geen toegang</h1>
-            {gebruiker.wachtwoord ? (
-              <p>Inloggen met een wachtwoord kan alleen voor beheerders. Log in met <strong>Microsoft (schoolaccount)</strong>.</p>
-            ) : (
-              <>
-                <p>Het account <strong>{gebruiker.email}</strong> staat niet in de lijst van het MOL-portaal.</p>
-                <p>Ben je leerling? Meld je bij je mentor. Ben je docent? Meld je bij de beheerder.</p>
-              </>
-            )}
-            <button onClick={uitloggen}>Uitloggen</button>
-          </div>
-        )}
-        {gebruiker?.type === 'leerling' && <Leerling leerling={gebruiker} />}
-        {gebruiker?.type === 'docent' && weergave === 'mentor' && <Mentor docent={gebruiker} />}
-        {gebruiker?.type === 'docent' && weergave === 'beheer' && <Beheer docent={gebruiker} />}
-      </main>
-      <BevestigHost />
-      <footer className="voet">
-        MOL-portaal · {SCHOOL.naam} · Je gegevens worden alleen gebruikt om gesprekken te plannen
-        en na afloop van de gespreksronde verwijderd.
-      </footer>
+      <Top metHoofdstukken={!!item && isOntgrendeld(item)} navOpen={navOpen} setNavOpen={setNavOpen} menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
+      {isBeheer ? <Suspense fallback={<main className="home"><p>Laden…</p></main>}><Beheer /></Suspense>
+        : !item ? <Home />
+        : !isOntgrendeld(item) ? <Codeslot key={item.slug} item={item} onOpen={() => setOpen((n) => n + 1)} />
+        : <Handleiding key={item.slug} item={item} anker={route.anker} navOpen={navOpen} setNavOpen={setNavOpen} />}
+      <div className="lb" hidden={!groot} onClick={(e) => { if (e.target.tagName !== 'IMG') sluitGroot() }}>
+        <button className="lb-x" type="button">Sluiten</button>
+        {groot && <img src={groot.src} alt="" />}
+      </div>
     </>
   )
 }

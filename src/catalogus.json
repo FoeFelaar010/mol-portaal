@@ -1,0 +1,75 @@
+{
+  "groepen": [
+    {
+      "titel": "Algemeen",
+      "tekst": "Handig voor elke dag op school: de wifi en je keuzes in Zermelo.",
+      "items": [
+        { "slug": "eduroam-wifi", "bron": "Handleiding_Eduroam-wifi", "titel": "Wifi eduroam", "tekst": "Verbinden met de school-wifi", "icoon": "wifi", "beta": true },
+        { "slug": "zermelo-go-lessen", "bron": "Handleiding_Zermelo-GO-lessen", "titel": "Zermelo: GO-lessen", "tekst": "Je GO-lessen kiezen", "icoon": "ico-zermelo.webp", "beta": true }
+      ]
+    },
+    {
+      "titel": "Office 365",
+      "tekst": "Werken met je schoolaccount: opslaan, samenwerken, schrijven, rekenen en presenteren.",
+      "items": [
+        { "slug": "onedrive", "bron": "Handleiding_OneDrive", "titel": "OneDrive", "tekst": "Je werk opslaan, terugvinden, delen en inleveren", "icoon": "ico-onedrive.webp" },
+        { "slug": "teams", "bron": "Handleiding_Teams", "titel": "Teams", "tekst": "Berichten lezen en opdrachten inleveren", "icoon": "ico-teams.webp" },
+        { "slug": "word-1-start", "bron": "Handleiding_Word-1-Start", "titel": "Word 1 · Start", "tekst": "Je eerste document typen en mooi maken", "icoon": "ico-word.webp" },
+        { "slug": "word-2-basis", "bron": "Handleiding_Word-2-Basis", "titel": "Word 2 · Basis", "tekst": "Een net werkstuk maken met inhoudsopgave", "icoon": "ico-word.webp" },
+        { "slug": "excel-1-start", "bron": "Handleiding_Excel-1-Start", "titel": "Excel 1 · Start", "tekst": "Je eerste rekenblad maken", "icoon": "ico-excel.webp" },
+        { "slug": "excel-2-basis", "bron": "Handleiding_Excel-2-Basis", "titel": "Excel 2 · Basis", "tekst": "Rekenen met hele rijen tegelijk", "icoon": "ico-excel.webp" },
+        { "slug": "excel-3-gevorderd", "bron": "Handleiding_Excel-3-Gevorderd", "titel": "Excel 3 · Gevorderd", "tekst": "Excel laten tellen en beslissen", "icoon": "ico-excel.webp" },
+        { "slug": "powerpoint", "bron": "Handleiding_PowerPoint", "titel": "PowerPoint", "tekst": "Een presentatie maken en geven", "icoon": "ico-powerpoint.webp" }
+      ]
+    },
+    {
+      "titel": "Ontwerpen en maken",
+      "tekst": "Zelf iets ontwerpen: een poster, een film of een 3D-model.",
+      "items": [
+        { "slug": "adobe-express", "bron": "Handleiding_Adobe-Express", "titel": "Adobe Express", "tekst": "Een poster, flyer of logo ontwerpen", "icoon": "ico-adobe-express.webp" },
+        { "slug": "clipchamp", "bron": "Handleiding_Clipchamp", "titel": "Clipchamp", "tekst": "Een filmpje monteren", "icoon": "ico-clipchamp.webp" },
+        { "slug": "tinkercad", "bron": "Handleiding_Tinkercad", "titel": "Tinkercad", "tekst": "Een 3D-ontwerp maken", "icoon": "ico-tinkercad.webp", "beta": true }
+      ]
+    },
+    {
+      "titel": "Programmeren",
+      "tekst": "Een micro:bit of een LEGO-robot laten doen wat jij wilt.",
+      "items": [
+        { "slug": "microbit", "bron": "Handleiding_MakeCode", "titel": "MakeCode", "tekst": "De micro:bit programmeren met blokken", "icoon": "microbit", "beta": true,
+          "extras": [{ "titel": "Oefenen met MakeCode", "src": "extra/oefenen-met-makecode.html" }] },
+        { "slug": "lego-spike-prime", "bron": "Handleiding_LEGO-SPIKE-Prime", "titel": "LEGO SPIKE Prime", "tekst": "Een robot bouwen en programmeren", "icoon": "lego", "beta": true },
+        { "slug": "arduino", "bron": "Handleiding_Arduino-1-Start", "titel": "Arduino", "tekst": "Starten met Arduino", "icoon": "arduino", "beta": true },
+        { "slug": "lovable", "bron": "Handleiding_Lovable", "titel": "Lovable", "tekst": "Apps en websites bouwen met AI", "icoon": "code", "beta": true,
+          "slot": "75f828791805ab68ac5579812fadd94207b0c51a68989ab121810e2625d0cb3d",
+          "extras": [{ "titel": "Welke stand kies je?", "src": "extra/lovable-modus-kiezer.html", "na": "chat-plan-en-build" },
+                     { "titel": "Prompt-bouwer", "src": "extra/lovable-prompt-bouwer.html", "na": "goede-prompts" }] }
+      ]
+    },
+    {
+      "titel": "Machines",
+      "tekst": "Je ontwerp klaarzetten voor de 3D-printer, de laser of de Cricut. Werk altijd met je docent erbij.",
+      "items": [
+        { "slug": "3d-printen", "bron": "Handleiding_3D-printen_Bambu-Studio", "titel": "Bambu Studio", "tekst": "Je 3D-ontwerp printen", "icoon": "ico-bambu-studio.webp",
+          "extras": [{ "titel": "3D-model bekijken", "src": "extra/3D-model_bekijken.html" }] },
+        { "slug": "xtool-studio", "bron": "Handleiding_xTool-Studio", "titel": "xTool Studio", "tekst": "Laseren met de xTool", "icoon": "ico-xtool.webp" },
+        { "slug": "falcon-design-space", "bron": "Handleiding_Falcon-Design-Space", "titel": "Falcon Design Space", "tekst": "Laseren met de Falcon", "icoon": "ico-falcon.webp" },
+        { "slug": "cricut-design-space", "bron": "Handleiding_Cricut-Design-Space", "titel": "Cricut Design Space", "tekst": "Snijden en persen met de Cricut", "icoon": "cricut", "beta": true }
+      ]
+    },
+    {
+      "titel": "Informatie",
+      "tekst": "Wat is het, hoe werkt het en wat kun je ermee?",
+      "items": [
+        { "slug": "wat-is-3d-printen", "bron": "Informatie_Wat-is-3D-printen", "titel": "Wat is 3D-printen?", "tekst": "Hoe het werkt en wat je ermee kunt", "icoon": "kubus",
+          "extras": [{ "titel": "Zo werkt een 3D-printer", "src": "extra/Zo_werkt_een_3D-printer.html", "na": "wat-is-3d-printen" },
+                     { "titel": "Timelapse: het bootje (3DBenchy) wordt laag voor laag geprint op de Bambu Lab X1C", "video": "extra/Timelapse_bootje_X1C.mp4",
+                       "poster": "extra/Timelapse_bootje_X1C_poster.jpg", "na": "hoe-werkt-een-3d-printer", "bij": "filmpje van deze print" }] },
+        { "slug": "wat-is-lasersnijden", "bron": "Informatie_Wat-is-lasersnijden", "titel": "Wat is lasersnijden?", "tekst": "CO2-laser en diodelaser", "icoon": "ico-xtool.webp",
+          "extras": [{ "titel": "Zo werkt een lasersnijder", "src": "extra/Zo_werkt_een_lasersnijder.html", "na": "hoe-werkt-een-lasersnijder" }] },
+        { "slug": "wat-is-cricut", "bron": "Informatie_Wat-is-Cricut", "titel": "Wat is een Cricut?", "tekst": "Snijplotter en hittepers", "icoon": "cricut", "beta": true },
+        { "slug": "wat-is-programmeren", "bron": "Informatie_Wat-is-programmeren", "titel": "Wat is programmeren?", "tekst": "Blokken, Python en de bouwstenen van een programma", "icoon": "code", "beta": true },
+        { "slug": "wat-is-ai", "bron": "Informatie_Wat-is-AI", "titel": "Wat is AI?", "tekst": "Hoe AI werkt en hoe je het veilig gebruikt", "icoon": "chip", "beta": true }
+      ]
+    }
+  ]
+}
